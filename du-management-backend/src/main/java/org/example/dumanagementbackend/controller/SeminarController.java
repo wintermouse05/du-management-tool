@@ -9,6 +9,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/seminars")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','HR','MEMBER')")
 public class SeminarController {
 
     private final SeminarService seminarService;
@@ -40,6 +42,7 @@ public class SeminarController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<SeminarResponse> update(@PathVariable Long id, @RequestBody SeminarRequest request) {
         return ResponseEntity.ok(seminarService.update(id, request));
     }

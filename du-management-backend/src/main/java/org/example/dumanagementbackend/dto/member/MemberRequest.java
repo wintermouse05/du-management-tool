@@ -7,6 +7,7 @@ public record MemberRequest(
         Long roleId,
         String username,
         String email,
+        String password,
         String fullName,
         LocalDate dob,
         LocalDate joinDate,

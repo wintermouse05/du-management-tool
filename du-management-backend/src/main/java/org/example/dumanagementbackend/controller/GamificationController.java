@@ -10,6 +10,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,11 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/gamification")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','HR','MEMBER')")
 public class GamificationController {
 
     private final GamificationService gamificationService;
 
     @PostMapping("/rules")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PointRuleResponse> createRule(@RequestBody PointRuleRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(gamificationService.createRule(request));
     }
@@ -36,11 +39,13 @@ public class GamificationController {
     }
 
     @PutMapping("/rules/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PointRuleResponse> updateRule(@PathVariable Long id, @RequestBody PointRuleRequest request) {
         return ResponseEntity.ok(gamificationService.updateRule(id, request));
     }
 
     @PostMapping("/points/manual")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<PointHistoryResponse> manualAdjust(@RequestBody ManualPointRequest request) {
         return ResponseEntity.ok(gamificationService.adjustManual(request));
     }

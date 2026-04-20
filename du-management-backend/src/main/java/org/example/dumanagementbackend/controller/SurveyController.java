@@ -9,6 +9,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,11 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/surveys")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','HR','MEMBER')")
 public class SurveyController {
 
     private final SurveyService surveyService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<SurveyResponse> create(@RequestBody SurveyRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(surveyService.create(request));
     }
@@ -41,11 +44,13 @@ public class SurveyController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<SurveyResponse> update(@PathVariable Long id, @RequestBody SurveyRequest request) {
         return ResponseEntity.ok(surveyService.update(id, request));
     }
 
     @PostMapping("/{id}/assign")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<SurveyProgressResponse> assign(@PathVariable Long id, @RequestParam Long userId) {
         return ResponseEntity.ok(surveyService.assignToUser(id, userId));
     }
@@ -56,6 +61,7 @@ public class SurveyController {
     }
 
     @GetMapping("/{id}/progress")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<SurveyProgressResponse> progress(@PathVariable Long id) {
         return ResponseEntity.ok(surveyService.getProgress(id));
     }

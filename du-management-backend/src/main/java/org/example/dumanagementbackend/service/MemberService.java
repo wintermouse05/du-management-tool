@@ -10,6 +10,7 @@ import org.example.dumanagementbackend.repository.RoleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ public class MemberService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public MemberResponse create(MemberRequest request) {
@@ -67,6 +69,11 @@ public class MemberService {
         user.setDob(request.dob());
         user.setJoinDate(request.joinDate());
         user.setStatus(request.status() != null ? request.status() : UserStatus.ACTIVE);
+        if (request.password() != null && !request.password().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.password()));
+        } else if (user.getPassword() == null || user.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode("ChangeMe@123"));
+        }
     }
 
     private MemberResponse toResponse(User user) {

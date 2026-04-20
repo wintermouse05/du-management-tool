@@ -1,6 +1,9 @@
 package org.example.dumanagementbackend.entity;
 
+import java.time.LocalDate;
+
 import org.example.dumanagementbackend.entity.enums.UserStatus;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,7 +16,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.time.LocalDate;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -44,6 +46,9 @@ public class User {
 
     @Column(nullable = false, unique = true, length = 255)
     private String email;
+
+        @Column(nullable = false, length = 255)
+        private String password;
 
     @Column(name = "full_name", nullable = false, length = 255)
     private String fullName;

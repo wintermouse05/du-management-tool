@@ -12,6 +12,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,11 +24,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','HR','MEMBER')")
 public class OrderController {
 
     private final OrderService orderService;
 
     @PostMapping("/menu-items")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<MenuItemResponse> createMenuItem(@RequestBody MenuItemRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(orderService.createMenuItem(request));
     }
@@ -38,6 +41,7 @@ public class OrderController {
     }
 
     @PostMapping("/sessions")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<OrderSessionResponse> createSession(@RequestBody OrderSessionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(orderService.createSession(request));
     }
@@ -48,6 +52,7 @@ public class OrderController {
     }
 
     @PatchMapping("/sessions/status")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<OrderSessionResponse> updateSessionStatus(
             @RequestParam Long sessionId,
             @RequestParam OrderSessionStatus status
@@ -66,6 +71,7 @@ public class OrderController {
     }
 
     @PatchMapping("/user-orders/paid")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<UserOrderResponse> markPaid(@RequestParam Long orderId, @RequestParam boolean paid) {
         return ResponseEntity.ok(orderService.markPaid(orderId, paid));
     }

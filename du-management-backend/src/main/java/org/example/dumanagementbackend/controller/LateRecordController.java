@@ -8,6 +8,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,16 +19,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/late-records")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','HR','MEMBER')")
 public class LateRecordController {
 
     private final LateRecordService lateRecordService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<LateRecordResponse> create(@RequestBody LateRecordRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(lateRecordService.create(request));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<List<LateRecordResponse>> getAll() {
         return ResponseEntity.ok(lateRecordService.getAll());
     }
@@ -38,6 +42,7 @@ public class LateRecordController {
     }
 
     @GetMapping("/monthly-summary")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<List<LateSummaryResponse>> monthlySummary(@RequestParam int year, @RequestParam int month) {
         return ResponseEntity.ok(lateRecordService.getMonthlySummary(year, month));
     }
