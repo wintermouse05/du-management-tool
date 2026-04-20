@@ -9,5 +9,5 @@ public class DuManagementBackendApplication {
     public static void main(String[] args) {
         SpringApplication.run(DuManagementBackendApplication.class, args);
     }
-
+    
 }

@@ -3,6 +3,7 @@ package org.example.dumanagementbackend.controller;
 import org.example.dumanagementbackend.dto.system.RoleRequest;
 import org.example.dumanagementbackend.dto.system.RoleResponse;
 import org.example.dumanagementbackend.service.RoleService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,7 +27,7 @@ public class RoleController {
     private final RoleService roleService;
 
     @PostMapping
-    public ResponseEntity<RoleResponse> create(@RequestBody RoleRequest request) {
+    public ResponseEntity<RoleResponse> create(@Valid @RequestBody RoleRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(roleService.create(request));
     }
 
@@ -41,7 +42,7 @@ public class RoleController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<RoleResponse> update(@PathVariable Long id, @RequestBody RoleRequest request) {
+    public ResponseEntity<RoleResponse> update(@PathVariable Long id, @Valid @RequestBody RoleRequest request) {
         return ResponseEntity.ok(roleService.update(id, request));
     }
 

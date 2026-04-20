@@ -4,6 +4,7 @@ import org.example.dumanagementbackend.dto.late.LateRecordRequest;
 import org.example.dumanagementbackend.dto.late.LateRecordResponse;
 import org.example.dumanagementbackend.dto.late.LateSummaryResponse;
 import org.example.dumanagementbackend.service.LateRecordService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,7 +27,7 @@ public class LateRecordController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<LateRecordResponse> create(@RequestBody LateRecordRequest request) {
+    public ResponseEntity<LateRecordResponse> create(@Valid @RequestBody LateRecordRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(lateRecordService.create(request));
     }
 

@@ -8,6 +8,7 @@ import org.example.dumanagementbackend.dto.order.UserOrderRequest;
 import org.example.dumanagementbackend.dto.order.UserOrderResponse;
 import org.example.dumanagementbackend.entity.enums.OrderSessionStatus;
 import org.example.dumanagementbackend.service.OrderService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,7 +32,7 @@ public class OrderController {
 
     @PostMapping("/menu-items")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<MenuItemResponse> createMenuItem(@RequestBody MenuItemRequest request) {
+    public ResponseEntity<MenuItemResponse> createMenuItem(@Valid @RequestBody MenuItemRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(orderService.createMenuItem(request));
     }
 
@@ -42,7 +43,7 @@ public class OrderController {
 
     @PostMapping("/sessions")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<OrderSessionResponse> createSession(@RequestBody OrderSessionRequest request) {
+    public ResponseEntity<OrderSessionResponse> createSession(@Valid @RequestBody OrderSessionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(orderService.createSession(request));
     }
 
@@ -61,7 +62,7 @@ public class OrderController {
     }
 
     @PostMapping("/user-orders")
-    public ResponseEntity<UserOrderResponse> placeOrder(@RequestBody UserOrderRequest request) {
+    public ResponseEntity<UserOrderResponse> placeOrder(@Valid @RequestBody UserOrderRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(orderService.placeOrder(request));
     }
 

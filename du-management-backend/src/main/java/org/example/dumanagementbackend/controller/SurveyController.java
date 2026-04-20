@@ -5,6 +5,7 @@ import org.example.dumanagementbackend.dto.survey.SurveyProgressResponse;
 import org.example.dumanagementbackend.dto.survey.SurveyRequest;
 import org.example.dumanagementbackend.dto.survey.SurveyResponse;
 import org.example.dumanagementbackend.service.SurveyService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,7 +30,7 @@ public class SurveyController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<SurveyResponse> create(@RequestBody SurveyRequest request) {
+    public ResponseEntity<SurveyResponse> create(@Valid @RequestBody SurveyRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(surveyService.create(request));
     }
 
@@ -45,7 +46,7 @@ public class SurveyController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<SurveyResponse> update(@PathVariable Long id, @RequestBody SurveyRequest request) {
+    public ResponseEntity<SurveyResponse> update(@PathVariable Long id, @Valid @RequestBody SurveyRequest request) {
         return ResponseEntity.ok(surveyService.update(id, request));
     }
 
@@ -56,7 +57,7 @@ public class SurveyController {
     }
 
     @PostMapping("/{id}/complete")
-    public ResponseEntity<SurveyProgressResponse> complete(@PathVariable Long id, @RequestBody SurveyCompletionRequest request) {
+    public ResponseEntity<SurveyProgressResponse> complete(@PathVariable Long id, @Valid @RequestBody SurveyCompletionRequest request) {
         return ResponseEntity.ok(surveyService.markCompletion(id, request));
     }
 

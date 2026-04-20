@@ -6,6 +6,7 @@ import org.example.dumanagementbackend.dto.gamification.PointHistoryResponse;
 import org.example.dumanagementbackend.dto.gamification.PointRuleRequest;
 import org.example.dumanagementbackend.dto.gamification.PointRuleResponse;
 import org.example.dumanagementbackend.service.GamificationService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,7 +30,7 @@ public class GamificationController {
 
     @PostMapping("/rules")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<PointRuleResponse> createRule(@RequestBody PointRuleRequest request) {
+    public ResponseEntity<PointRuleResponse> createRule(@Valid @RequestBody PointRuleRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(gamificationService.createRule(request));
     }
 
@@ -40,13 +41,13 @@ public class GamificationController {
 
     @PutMapping("/rules/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<PointRuleResponse> updateRule(@PathVariable Long id, @RequestBody PointRuleRequest request) {
+    public ResponseEntity<PointRuleResponse> updateRule(@PathVariable Long id, @Valid @RequestBody PointRuleRequest request) {
         return ResponseEntity.ok(gamificationService.updateRule(id, request));
     }
 
     @PostMapping("/points/manual")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<PointHistoryResponse> manualAdjust(@RequestBody ManualPointRequest request) {
+    public ResponseEntity<PointHistoryResponse> manualAdjust(@Valid @RequestBody ManualPointRequest request) {
         return ResponseEntity.ok(gamificationService.adjustManual(request));
     }
 

@@ -3,6 +3,7 @@ package org.example.dumanagementbackend.controller;
 import org.example.dumanagementbackend.dto.member.MemberRequest;
 import org.example.dumanagementbackend.dto.member.MemberResponse;
 import org.example.dumanagementbackend.service.MemberService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,7 +26,7 @@ public class MemberController {
     private final MemberService memberService;
 
     @PostMapping
-    public ResponseEntity<MemberResponse> create(@RequestBody MemberRequest request) {
+    public ResponseEntity<MemberResponse> create(@Valid @RequestBody MemberRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(memberService.create(request));
     }
 
@@ -40,7 +41,7 @@ public class MemberController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<MemberResponse> update(@PathVariable Long id, @RequestBody MemberRequest request) {
+    public ResponseEntity<MemberResponse> update(@PathVariable Long id, @Valid @RequestBody MemberRequest request) {
         return ResponseEntity.ok(memberService.update(id, request));
     }
 

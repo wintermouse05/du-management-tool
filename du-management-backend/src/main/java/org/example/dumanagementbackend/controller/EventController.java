@@ -5,6 +5,7 @@ import org.example.dumanagementbackend.dto.event.EventAttendeeResponse;
 import org.example.dumanagementbackend.dto.event.EventRequest;
 import org.example.dumanagementbackend.dto.event.EventResponse;
 import org.example.dumanagementbackend.service.EventService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,7 +30,7 @@ public class EventController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<EventResponse> create(@RequestBody EventRequest request) {
+    public ResponseEntity<EventResponse> create(@Valid @RequestBody EventRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(eventService.create(request));
     }
 
@@ -45,12 +46,12 @@ public class EventController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<EventResponse> update(@PathVariable Long id, @RequestBody EventRequest request) {
+    public ResponseEntity<EventResponse> update(@PathVariable Long id, @Valid @RequestBody EventRequest request) {
         return ResponseEntity.ok(eventService.update(id, request));
     }
 
     @PostMapping("/{id}/rsvp")
-    public ResponseEntity<EventAttendeeResponse> rsvp(@PathVariable Long id, @RequestBody EventAttendanceRequest request) {
+    public ResponseEntity<EventAttendeeResponse> rsvp(@PathVariable Long id, @Valid @RequestBody EventAttendanceRequest request) {
         return ResponseEntity.ok(eventService.rsvp(id, request));
     }
 

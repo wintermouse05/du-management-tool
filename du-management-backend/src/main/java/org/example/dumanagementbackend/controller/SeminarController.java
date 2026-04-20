@@ -5,6 +5,7 @@ import org.example.dumanagementbackend.dto.seminar.SeminarResponse;
 import org.example.dumanagementbackend.dto.seminar.SeminarVoteRequest;
 import org.example.dumanagementbackend.dto.seminar.SeminarVoteResponse;
 import org.example.dumanagementbackend.service.SeminarService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -27,7 +28,7 @@ public class SeminarController {
     private final SeminarService seminarService;
 
     @PostMapping
-    public ResponseEntity<SeminarResponse> create(@RequestBody SeminarRequest request) {
+    public ResponseEntity<SeminarResponse> create(@Valid @RequestBody SeminarRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(seminarService.create(request));
     }
 
@@ -43,12 +44,12 @@ public class SeminarController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<SeminarResponse> update(@PathVariable Long id, @RequestBody SeminarRequest request) {
+    public ResponseEntity<SeminarResponse> update(@PathVariable Long id, @Valid @RequestBody SeminarRequest request) {
         return ResponseEntity.ok(seminarService.update(id, request));
     }
 
     @PostMapping("/{id}/vote")
-    public ResponseEntity<SeminarVoteResponse> vote(@PathVariable Long id, @RequestBody SeminarVoteRequest request) {
+    public ResponseEntity<SeminarVoteResponse> vote(@PathVariable Long id, @Valid @RequestBody SeminarVoteRequest request) {
         return ResponseEntity.ok(seminarService.vote(id, request));
     }
 

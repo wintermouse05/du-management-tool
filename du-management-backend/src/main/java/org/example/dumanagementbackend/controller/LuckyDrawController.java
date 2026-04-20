@@ -7,6 +7,7 @@ import org.example.dumanagementbackend.dto.luckydraw.LuckyDrawSessionResponse;
 import org.example.dumanagementbackend.dto.luckydraw.LuckyDrawWinnerRequest;
 import org.example.dumanagementbackend.dto.luckydraw.LuckyDrawWinnerResponse;
 import org.example.dumanagementbackend.service.LuckyDrawService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,7 +30,7 @@ public class LuckyDrawController {
 
     @PostMapping("/sessions")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<LuckyDrawSessionResponse> createSession(@RequestBody LuckyDrawSessionRequest request) {
+    public ResponseEntity<LuckyDrawSessionResponse> createSession(@Valid @RequestBody LuckyDrawSessionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(luckyDrawService.createSession(request));
     }
 
@@ -40,7 +41,7 @@ public class LuckyDrawController {
 
     @PostMapping("/prizes")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<LuckyDrawPrizeResponse> createPrize(@RequestBody LuckyDrawPrizeRequest request) {
+    public ResponseEntity<LuckyDrawPrizeResponse> createPrize(@Valid @RequestBody LuckyDrawPrizeRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(luckyDrawService.createPrize(request));
     }
 
@@ -51,7 +52,7 @@ public class LuckyDrawController {
 
     @PostMapping("/winners")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<LuckyDrawWinnerResponse> drawWinner(@RequestBody LuckyDrawWinnerRequest request) {
+    public ResponseEntity<LuckyDrawWinnerResponse> drawWinner(@Valid @RequestBody LuckyDrawWinnerRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(luckyDrawService.drawWinner(request));
     }
 
