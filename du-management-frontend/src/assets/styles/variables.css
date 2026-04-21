@@ -1,0 +1,85 @@
+/* ============================================================
+   Design System — Airtable-inspired (DESIGN.md)
+   Font: Inter (open-source replacement for Haas)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+
+:root {
+  /* ── Primary Colors ─────────────────────────────── */
+  --theme-blue: #1b61c9;
+  --theme-blue-hover: #1550a8;
+  --theme-blue-light: rgba(27, 97, 201, 0.08);
+  --theme-blue-surface: rgba(27, 97, 201, 0.04);
+  --theme-text-primary: #181d26;
+  --theme-surface: #ffffff;
+  --theme-surface-light: #f8fafc;
+  --theme-spotlight: rgba(249, 252, 255, 0.97);
+
+  /* ── Semantic Colors ────────────────────────────── */
+  --theme-success: #006400;
+  --theme-success-bg: rgba(0, 100, 0, 0.08);
+  --theme-warning: #b45309;
+  --theme-warning-bg: rgba(180, 83, 9, 0.08);
+  --theme-danger: #dc2626;
+  --theme-danger-bg: rgba(220, 38, 38, 0.08);
+  --theme-info: #1b61c9;
+  --theme-info-bg: rgba(27, 97, 201, 0.06);
+
+  /* ── Text Colors ────────────────────────────────── */
+  --theme-text-weak: rgba(4, 14, 32, 0.69);
+  --theme-text-secondary: rgba(7, 12, 20, 0.82);
+  --theme-text-inverse: #ffffff;
+  --theme-text-link: #254fad;
+
+  /* ── Neutral / Borders ──────────────────────────── */
+  --theme-border: #e0e2e6;
+  --theme-border-hover: #c8cbcf;
+  --theme-dark-gray: #333333;
+  --theme-bg-hover: rgba(4, 14, 32, 0.04);
+  --theme-bg-active: rgba(4, 14, 32, 0.08);
+  --theme-divider: #eef0f2;
+
+  /* ── Shadows (blue-tinted multi-layer) ──────────── */
+  --theme-shadow-card: rgba(0, 0, 0, 0.32) 0px 0px 1px,
+    rgba(0, 0, 0, 0.08) 0px 0px 2px,
+    rgba(45, 127, 249, 0.28) 0px 1px 3px,
+    rgba(0, 0, 0, 0.06) 0px 0px 0px 0.5px inset;
+  --theme-shadow-soft: rgba(15, 48, 106, 0.05) 0px 0px 20px;
+  --theme-shadow-elevated: rgba(0, 0, 0, 0.1) 0px 4px 12px,
+    rgba(45, 127, 249, 0.15) 0px 2px 8px;
+
+  /* ── Typography ─────────────────────────────────── */
+  --font-primary: 'Inter', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Inter', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  /* ── Spacing (8px base) ─────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ── Radius ─────────────────────────────────────── */
+  --radius-sm: 2px;
+  --radius-md: 8px;
+  --radius-btn: 12px;
+  --radius-card: 16px;
+  --radius-section: 24px;
+  --radius-lg: 32px;
+  --radius-full: 50%;
+
+  /* ── Sidebar ────────────────────────────────────── */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 72px;
+  --topbar-height: 64px;
+
+  /* ── Transitions ────────────────────────────────── */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+}

@@ -1,0 +1,107 @@
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { seminarsApi } from '@/api/seminars'
+import type { SeminarResponse, SeminarRequest, SeminarVoteResponse } from '@/types'
+import { SeminarStatus, VoteType } from '@/types'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
+import Textarea from 'primevue/textarea'
+import Select from 'primevue/select'
+import DatePicker from 'primevue/datepicker'
+import Tag from 'primevue/tag'
+import { useToast } from 'primevue/usetoast'
+
+const auth = useAuthStore()
+const toast = useToast()
+const seminars = ref<SeminarResponse[]>([])
+const total = ref(0); const loading = ref(false); const pg = ref(0); const rows = ref(10)
+const dialogVisible = ref(false); const editing = ref(false); const editId = ref<number|null>(null)
+const form = ref<SeminarRequest>({ title: '', description: '', status: SeminarStatus.PROPOSED })
+const formDate = ref<Date|null>(null)
+const votesDialog = ref(false); const votes = ref<SeminarVoteResponse[]>([]); const voteSeminarId = ref(0)
+
+async function load() {
+  loading.value = true
+  try { const r = await seminarsApi.getAll({ page: pg.value, size: rows.value }); seminars.value = r.data.content; total.value = r.data.totalElements }
+  finally { loading.value = false }
+}
+function onPage(e: any) { pg.value = e.page; rows.value = e.rows; load() }
+function openCreate() { editing.value = false; editId.value = null; form.value = { title: '', description: '', status: SeminarStatus.PROPOSED }; formDate.value = null; dialogVisible.value = true }
+function openEdit(s: SeminarResponse) { editing.value = true; editId.value = s.id; form.value = { speakerId: s.speakerId, title: s.title, description: s.description || '', scheduledAt: s.scheduledAt, status: s.status }; formDate.value = s.scheduledAt ? new Date(s.scheduledAt) : null; dialogVisible.value = true }
+
+async function save() {
+  if (formDate.value) form.value.scheduledAt = formDate.value.toISOString()
+  try {
+    if (editing.value && editId.value) await seminarsApi.update(editId.value, form.value)
+    else await seminarsApi.create(form.value)
+    toast.add({ severity: 'success', summary: editing.value ? 'Updated' : 'Created', life: 3000 }); dialogVisible.value = false; load()
+  } catch (err: any) { toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 4000 }) }
+}
+
+async function vote(id: number, voteType: VoteType) {
+  if (!auth.userId) {
+    toast.add({ severity: 'error', summary: 'Cannot vote', detail: 'Missing user identity. Please log in again.', life: 3000 })
+    return
+  }
+  try { await seminarsApi.vote(id, { userId: auth.userId, voteType }); toast.add({ severity: 'success', summary: 'Vote recorded', life: 2000 }); load()
+  } catch (err: any) { toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 3000 }) }
+}
+
+async function showVotes(id: number) {
+  voteSeminarId.value = id
+  try { const r = await seminarsApi.getVotes(id, { size: 100 }); votes.value = r.data.content } catch {}
+  votesDialog.value = true
+}
+
+function statusSeverity(s: SeminarStatus) { return s === SeminarStatus.COMPLETED ? 'success' : s === SeminarStatus.CANCELLED ? 'danger' : s === SeminarStatus.APPROVED ? 'info' : 'warn' }
+function fmtDate(d: string|null) { return d ? new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—' }
+const statusOpts = Object.values(SeminarStatus).map(v => ({ label: v, value: v }))
+
+onMounted(load)
+</script>
+
+<template>
+  <div class="page-container">
+    <div class="page-header">
+      <div><h2>Seminars</h2><p class="page-subtitle">Propose topics, vote, and schedule seminars</p></div>
+      <Button label="Propose Seminar" icon="pi pi-plus" @click="openCreate" />
+    </div>
+    <div class="content-card">
+      <DataTable :value="seminars" :loading="loading" :paginator="true" :rows="rows" :totalRecords="total" :lazy="true" @page="onPage" stripedRows>
+        <Column field="title" header="Title" />
+        <Column field="speakerName" header="Speaker"><template #body="{data}">{{ data.speakerName || '—' }}</template></Column>
+        <Column field="scheduledAt" header="Schedule"><template #body="{data}">{{ fmtDate(data.scheduledAt) }}</template></Column>
+        <Column field="status" header="Status"><template #body="{data}"><Tag :value="data.status" :severity="statusSeverity(data.status)" /></template></Column>
+        <Column header="Actions" style="width:220px">
+          <template #body="{data}">
+            <div style="display:flex;gap:4px;">
+              <Button icon="pi pi-thumbs-up" text rounded severity="success" @click="vote(data.id, VoteType.UPVOTE)" v-tooltip="'Upvote'" />
+              <Button icon="pi pi-thumbs-down" text rounded severity="danger" @click="vote(data.id, VoteType.DOWNVOTE)" v-tooltip="'Downvote'" />
+              <Button icon="pi pi-eye" text rounded @click="showVotes(data.id)" v-tooltip="'View votes'" />
+              <Button v-if="auth.isAdminOrHR" icon="pi pi-pencil" text rounded severity="info" @click="openEdit(data)" />
+            </div>
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+    <Dialog v-model:visible="dialogVisible" :header="editing ? 'Edit Seminar' : 'Propose Seminar'" modal :style="{width:'520px'}">
+      <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+        <div class="form-field"><label>Title</label><InputText v-model="form.title" fluid /></div>
+        <div class="form-field"><label>Description</label><Textarea v-model="form.description" rows="3" fluid /></div>
+        <div class="form-field"><label>Scheduled At</label><DatePicker v-model="formDate" showTime hourFormat="24" fluid /></div>
+        <div v-if="editing" class="form-field"><label>Status</label><Select v-model="form.status" :options="statusOpts" optionLabel="label" optionValue="value" fluid /></div>
+      </div>
+      <template #footer><Button label="Cancel" text @click="dialogVisible=false" /><Button :label="editing?'Update':'Create'" icon="pi pi-check" @click="save" /></template>
+    </Dialog>
+    <Dialog v-model:visible="votesDialog" header="Votes" modal :style="{width:'400px'}">
+      <DataTable :value="votes" stripedRows>
+        <Column field="userId" header="User ID" />
+        <Column field="voteType" header="Vote"><template #body="{data}"><Tag :value="data.voteType" :severity="data.voteType==='UPVOTE'?'success':'danger'" /></template></Column>
+      </DataTable>
+    </Dialog>
+  </div>
+</template>
