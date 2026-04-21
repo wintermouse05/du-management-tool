@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { ordersApi } from '@/api/orders'
-import type { MenuItemResponse, OrderSessionResponse, UserOrderResponse } from '@/types'
+import type { MenuItemResponse, OrderSessionResponse, OrderSessionSummaryResponse, UserOrderResponse } from '@/types'
 import { OrderSessionStatus } from '@/types'
 import { wsService } from '@/services/websocket'
 import DataTable from 'primevue/datatable'
@@ -30,10 +30,42 @@ const menuItems = ref<MenuItemResponse[]>([])
 const menuLoading = ref(false)
 const menuDialog = ref(false)
 const menuForm = ref({ name: '', price: 0 })
+const menuEditing = ref(false)
+const menuEditingId = ref<number | null>(null)
 async function loadMenu() { menuLoading.value = true; try { const r = await ordersApi.getMenuItems({ size: 100 }); menuItems.value = r.data.content } finally { menuLoading.value = false } }
-async function createMenuItem() {
-  try { await ordersApi.createMenuItem(menuForm.value); toast.add({ severity:'success', summary:'Menu item added', life:2000 }); menuDialog.value = false; loadMenu()
+function openCreateMenuItem() {
+  menuEditing.value = false
+  menuEditingId.value = null
+  menuForm.value = { name: '', price: 0 }
+  menuDialog.value = true
+}
+function openEditMenuItem(item: MenuItemResponse) {
+  menuEditing.value = true
+  menuEditingId.value = item.id
+  menuForm.value = { name: item.name, price: item.price }
+  menuDialog.value = true
+}
+async function saveMenuItem() {
+  try {
+    if (menuEditing.value && menuEditingId.value) {
+      await ordersApi.updateMenuItem(menuEditingId.value, menuForm.value)
+      toast.add({ severity:'success', summary:'Menu item updated', life:2000 })
+    } else {
+      await ordersApi.createMenuItem(menuForm.value)
+      toast.add({ severity:'success', summary:'Menu item added', life:2000 })
+    }
+    menuDialog.value = false
+    loadMenu()
   } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 }) }
+}
+async function deleteMenuItem(id: number) {
+  try {
+    await ordersApi.deleteMenuItem(id)
+    toast.add({ severity:'warn', summary:'Menu item deleted', life:2000 })
+    loadMenu()
+  } catch (e: any) {
+    toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 })
+  }
 }
 
 // Sessions
@@ -56,11 +88,23 @@ async function updateStatus(id: number, status: OrderSessionStatus) {
 const orders = ref<UserOrderResponse[]>([])
 const ordLoading = ref(false)
 const selectedSession = ref<number|null>(null)
+const summary = ref<OrderSessionSummaryResponse | null>(null)
 const orderDialog = ref(false)
 const orderForm = ref({ sessionId: 0, itemId: 0, quantity: 1, note: '' })
 async function loadOrders() {
   if (!selectedSession.value) return
   ordLoading.value = true; try { const r = await ordersApi.getOrdersBySession(selectedSession.value, { size: 100 }); orders.value = r.data.content } finally { ordLoading.value = false }
+}
+async function loadSummary() {
+  if (!selectedSession.value) {
+    return
+  }
+  try {
+    const r = await ordersApi.getSessionSummary(selectedSession.value)
+    summary.value = r.data
+  } catch (e: any) {
+    toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message || 'Cannot load summary', life:3000 })
+  }
 }
 async function placeOrder() {
   if (!auth.userId) {
@@ -109,9 +153,15 @@ onUnmounted(() => {
         </TabList>
         <TabPanels>
           <TabPanel value="0">
-            <div style="display:flex;justify-content:flex-end;margin-bottom:var(--space-4);"><Button v-if="auth.isAdminOrHR" label="Add Item" icon="pi pi-plus" size="small" @click="menuDialog=true" /></div>
+            <div style="display:flex;justify-content:flex-end;margin-bottom:var(--space-4);"><Button v-if="auth.isAdminOrHR" label="Add Item" icon="pi pi-plus" size="small" @click="openCreateMenuItem" /></div>
             <DataTable :value="menuItems" :loading="menuLoading" stripedRows>
               <Column field="name" header="Name" /><Column field="price" header="Price"><template #body="{data}">{{ data.price.toLocaleString() }} ₫</template></Column>
+              <Column v-if="auth.isAdminOrHR" header="Actions" style="width:120px">
+                <template #body="{ data }">
+                  <Button icon="pi pi-pencil" text rounded severity="info" @click="openEditMenuItem(data)" />
+                  <Button icon="pi pi-trash" text rounded severity="danger" @click="deleteMenuItem(data.id)" />
+                </template>
+              </Column>
             </DataTable>
           </TabPanel>
           <TabPanel value="1">
@@ -131,6 +181,7 @@ onUnmounted(() => {
             <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4);align-items:center;">
               <Select v-model="selectedSession" :options="sessions" optionLabel="id" optionValue="id" placeholder="Select Session" style="width:200px" />
               <Button label="Load" icon="pi pi-search" size="small" outlined @click="loadOrders" />
+              <Button label="View Summary" icon="pi pi-chart-bar" size="small" outlined @click="loadSummary" :disabled="!selectedSession" />
               <div style="flex:1"></div>
               <Button v-if="selectedSession" label="Place Order" icon="pi pi-plus" size="small" @click="orderDialog=true" />
             </div>
@@ -139,17 +190,31 @@ onUnmounted(() => {
               <Column field="note" header="Note" /><Column field="paid" header="Paid"><template #body="{data}"><Tag :value="data.paid?'Yes':'No'" :severity="data.paid?'success':'warn'" /></template></Column>
               <Column v-if="auth.isAdminOrHR" header="" style="width:120px"><template #body="{data}"><Button v-if="!data.paid" label="Pay" size="small" @click="markPaid(data.id, true)" /></template></Column>
             </DataTable>
+            <div v-if="summary" style="margin-top:var(--space-5);">
+              <h4 style="margin-bottom:var(--space-3);">Session Summary</h4>
+              <div style="display:flex;gap:var(--space-4);margin-bottom:var(--space-3);flex-wrap:wrap;">
+                <Tag :value="`Lines: ${summary.totalOrderLines}`" severity="info" />
+                <Tag :value="`Total Qty: ${summary.totalQuantity}`" severity="warn" />
+                <Tag :value="`Grand Total: ${summary.grandTotal.toLocaleString()} ₫`" severity="success" />
+              </div>
+              <DataTable :value="summary.items" stripedRows>
+                <Column field="itemName" header="Item" />
+                <Column field="unitPrice" header="Unit Price"><template #body="{ data }">{{ data.unitPrice.toLocaleString() }} ₫</template></Column>
+                <Column field="totalQuantity" header="Total Qty" />
+                <Column field="totalAmount" header="Total Amount"><template #body="{ data }">{{ data.totalAmount.toLocaleString() }} ₫</template></Column>
+              </DataTable>
+            </div>
           </TabPanel>
         </TabPanels>
       </Tabs>
     </div>
     <!-- Menu Item Dialog -->
-    <Dialog v-model:visible="menuDialog" header="Add Menu Item" modal :style="{width:'380px'}">
+    <Dialog v-model:visible="menuDialog" :header="menuEditing ? 'Edit Menu Item' : 'Add Menu Item'" modal :style="{width:'380px'}">
       <div style="display:flex;flex-direction:column;gap:var(--space-4);">
         <div class="form-field"><label>Name</label><InputText v-model="menuForm.name" fluid /></div>
         <div class="form-field"><label>Price</label><InputNumber v-model="menuForm.price" fluid /></div>
       </div>
-      <template #footer><Button label="Cancel" text @click="menuDialog=false" /><Button label="Add" icon="pi pi-check" @click="createMenuItem" /></template>
+      <template #footer><Button label="Cancel" text @click="menuDialog=false" /><Button :label="menuEditing ? 'Update' : 'Add'" icon="pi pi-check" @click="saveMenuItem" /></template>
     </Dialog>
     <!-- Session Dialog -->
     <Dialog v-model:visible="sessDialog" header="New Order Session" modal :style="{width:'380px'}">

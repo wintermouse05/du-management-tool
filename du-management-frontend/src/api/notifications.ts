@@ -4,6 +4,8 @@ import type {
   NotificationJobToggleRequest,
   NotificationTemplateRequest,
   NotificationTemplateResponse,
+  NotificationChannelRequest,
+  NotificationChannelResponse,
   NotificationInboxResponse,
   NotificationUnreadCountResponse,
   Page,
@@ -55,5 +57,21 @@ export const notificationsApi = {
     return http.post<{ message: string }>('/notifications/survey-reminder', null, {
       params: { surveyId },
     })
+  },
+
+  getChannels() {
+    return http.get<NotificationChannelResponse[]>('/notifications/channels')
+  },
+
+  createChannel(payload: NotificationChannelRequest) {
+    return http.post<NotificationChannelResponse>('/notifications/channels', payload)
+  },
+
+  updateChannel(id: number, payload: NotificationChannelRequest) {
+    return http.put<NotificationChannelResponse>(`/notifications/channels/${id}`, payload)
+  },
+
+  deleteChannel(id: number) {
+    return http.delete<void>(`/notifications/channels/${id}`)
   },
 }

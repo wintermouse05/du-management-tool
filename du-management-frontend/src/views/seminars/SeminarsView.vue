@@ -23,6 +23,8 @@ const dialogVisible = ref(false); const editing = ref(false); const editId = ref
 const form = ref<SeminarRequest>({ title: '', description: '', status: SeminarStatus.PROPOSED })
 const formDate = ref<Date|null>(null)
 const votesDialog = ref(false); const votes = ref<SeminarVoteResponse[]>([]); const voteSeminarId = ref(0)
+const materialInput = ref<HTMLInputElement | null>(null)
+const materialSeminarId = ref<number | null>(null)
 
 async function load() {
   loading.value = true
@@ -57,7 +59,31 @@ async function showVotes(id: number) {
   votesDialog.value = true
 }
 
-function statusSeverity(s: SeminarStatus) { return s === SeminarStatus.COMPLETED ? 'success' : s === SeminarStatus.CANCELLED ? 'danger' : s === SeminarStatus.APPROVED ? 'info' : 'warn' }
+function openUploadMaterials(id: number) {
+  materialSeminarId.value = id
+  materialInput.value?.click()
+}
+
+async function handleMaterialSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !materialSeminarId.value) {
+    return
+  }
+
+  try {
+    await seminarsApi.uploadMaterials(materialSeminarId.value, file)
+    toast.add({ severity: 'success', summary: 'Materials uploaded', life: 2500 })
+    load()
+  } catch (err: any) {
+    toast.add({ severity: 'error', summary: 'Upload failed', detail: err.response?.data?.message || 'Unable to upload materials', life: 3000 })
+  } finally {
+    input.value = ''
+    materialSeminarId.value = null
+  }
+}
+
+function statusSeverity(s: SeminarStatus) { return s === SeminarStatus.DONE ? 'success' : s === SeminarStatus.SCHEDULED ? 'info' : s === SeminarStatus.APPROVED ? 'warn' : 'secondary' }
 function fmtDate(d: string|null) { return d ? new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—' }
 const statusOpts = Object.values(SeminarStatus).map(v => ({ label: v, value: v }))
 
@@ -71,17 +97,30 @@ onMounted(load)
       <Button label="Propose Seminar" icon="pi pi-plus" @click="openCreate" />
     </div>
     <div class="content-card">
+      <input
+        ref="materialInput"
+        type="file"
+        style="display:none"
+        @change="handleMaterialSelected"
+      />
       <DataTable :value="seminars" :loading="loading" :paginator="true" :rows="rows" :totalRecords="total" :lazy="true" @page="onPage" stripedRows>
         <Column field="title" header="Title" />
         <Column field="speakerName" header="Speaker"><template #body="{data}">{{ data.speakerName || '—' }}</template></Column>
         <Column field="scheduledAt" header="Schedule"><template #body="{data}">{{ fmtDate(data.scheduledAt) }}</template></Column>
+        <Column field="materialsUrl" header="Materials">
+          <template #body="{ data }">
+            <a v-if="data.materialsUrl" :href="data.materialsUrl" target="_blank" rel="noopener noreferrer" style="color:var(--theme-blue);">Download</a>
+            <span v-else>—</span>
+          </template>
+        </Column>
         <Column field="status" header="Status"><template #body="{data}"><Tag :value="data.status" :severity="statusSeverity(data.status)" /></template></Column>
-        <Column header="Actions" style="width:220px">
+        <Column header="Actions" style="width:260px">
           <template #body="{data}">
             <div style="display:flex;gap:4px;">
               <Button icon="pi pi-thumbs-up" text rounded severity="success" @click="vote(data.id, VoteType.UPVOTE)" v-tooltip="'Upvote'" />
               <Button icon="pi pi-thumbs-down" text rounded severity="danger" @click="vote(data.id, VoteType.DOWNVOTE)" v-tooltip="'Downvote'" />
               <Button icon="pi pi-eye" text rounded @click="showVotes(data.id)" v-tooltip="'View votes'" />
+              <Button v-if="auth.isAdminOrHR" icon="pi pi-upload" text rounded severity="secondary" @click="openUploadMaterials(data.id)" v-tooltip="'Upload materials'" />
               <Button v-if="auth.isAdminOrHR" icon="pi pi-pencil" text rounded severity="info" @click="openEdit(data)" />
             </div>
           </template>

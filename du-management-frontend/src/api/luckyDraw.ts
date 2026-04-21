@@ -2,6 +2,7 @@ import http from './http'
 import type {
   LuckyDrawSessionRequest, LuckyDrawSessionResponse,
   LuckyDrawPrizeRequest, LuckyDrawPrizeResponse,
+  LuckyDrawParticipantResponse,
   LuckyDrawWinnerRequest, LuckyDrawWinnerResponse,
   Page, Pageable
 } from '@/types'
@@ -17,6 +18,14 @@ export const luckyDrawApi = {
     })
   },
 
+  setupParticipants(sessionId: number, participantIds: number[]) {
+    return http.post<LuckyDrawSessionResponse>(`/lucky-draw/sessions/${sessionId}/participants`, { participantIds })
+  },
+
+  getParticipants(sessionId: number) {
+    return http.get<LuckyDrawParticipantResponse[]>(`/lucky-draw/sessions/${sessionId}/participants`)
+  },
+
   createPrize(data: LuckyDrawPrizeRequest) {
     return http.post<LuckyDrawPrizeResponse>('/lucky-draw/prizes', data)
   },
@@ -29,6 +38,10 @@ export const luckyDrawApi = {
 
   drawWinner(data: LuckyDrawWinnerRequest) {
     return http.post<LuckyDrawWinnerResponse>('/lucky-draw/winners', data)
+  },
+
+  drawWinnerFromPool(prizeId: number) {
+    return http.post<LuckyDrawWinnerResponse>(`/lucky-draw/prizes/${prizeId}/draw`)
   },
 
   getWinnersByPrize(prizeId: number, params?: Pageable) {

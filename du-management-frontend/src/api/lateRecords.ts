@@ -24,4 +24,8 @@ export const lateRecordsApi = {
       params: { year, month, ...params },
     })
   },
+
+  exportCsv(params?: { year?: number; month?: number }) {
+    return http.get<Blob>('/late-records/export', { params, responseType: 'blob' as const })
+  },
 }

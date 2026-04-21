@@ -62,6 +62,19 @@ async function showProgress(id: number) {
   } catch (err: any) { toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 3000 }) }
 }
 
+async function markCompleted(surveyId: number, completed: boolean) {
+  if (!auth.userId) {
+    toast.add({ severity: 'error', summary: 'Cannot update survey', detail: 'Missing user identity. Please log in again.', life: 3000 })
+    return
+  }
+  try {
+    await surveysApi.complete(surveyId, { userId: auth.userId, completed })
+    toast.add({ severity: 'success', summary: completed ? 'Marked as completed' : 'Marked as incomplete', life: 2500 })
+  } catch (err: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message || 'Failed to update survey status', life: 3000 })
+  }
+}
+
 watch(progressDialog, (newVal) => {
   if (!newVal && sub) {
     sub.unsubscribe()
@@ -92,6 +105,8 @@ onUnmounted(() => {
         <Column header="Actions" style="width:220px">
           <template #body="{data}">
             <div style="display:flex;gap:4px;">
+              <Button v-if="auth.isMember" icon="pi pi-check" text rounded severity="success" v-tooltip="'Mark completed'" @click="markCompleted(data.id, true)" />
+              <Button v-if="auth.isMember" icon="pi pi-times" text rounded severity="secondary" v-tooltip="'Mark incomplete'" @click="markCompleted(data.id, false)" />
               <Button v-if="auth.isAdminOrHR" icon="pi pi-user-plus" text rounded v-tooltip="'Assign'" @click="assignSurveyId=data.id;assignDialog=true" />
               <Button v-if="auth.isAdminOrHR" icon="pi pi-chart-bar" text rounded v-tooltip="'Progress'" @click="showProgress(data.id)" />
               <Button v-if="auth.isAdminOrHR" icon="pi pi-pencil" text rounded severity="info" @click="openEdit(data)" />

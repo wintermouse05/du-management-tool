@@ -44,6 +44,22 @@ async function handleCheckIn(userId: number) {
   } catch (err: any) { toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 3000 }) }
 }
 
+async function handleRsvp(status: RsvpStatus) {
+  if (!auth.userId) {
+    toast.add({ severity: 'error', summary: 'Cannot RSVP', detail: 'Missing user identity. Please log in again.', life: 3000 })
+    return
+  }
+  try {
+    await eventsApi.rsvp(eventId, { userId: auth.userId, rsvpStatus: status })
+    toast.add({ severity: 'success', summary: `RSVP ${status}`, life: 2000 })
+    if (auth.isAdminOrHR) {
+      loadAttendees()
+    }
+  } catch (err: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message || 'RSVP failed', life: 3000 })
+  }
+}
+
 function rsvpSeverity(s: RsvpStatus) { return s === RsvpStatus.YES ? 'success' : s === RsvpStatus.NO ? 'danger' : 'warn' }
 function fmtDate(d: string) { return d ? new Date(d).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '' }
 
@@ -53,7 +69,10 @@ onMounted(() => {
     router.replace('/events')
     return
   }
-  loadEvent(); loadAttendees()
+  loadEvent()
+  if (auth.isAdminOrHR) {
+    loadAttendees()
+  }
 })
 </script>
 
@@ -73,9 +92,14 @@ onMounted(() => {
         <div><div class="caption">Date</div><div style="font-weight:600;margin-top:4px;">{{ fmtDate(event.eventDate) }}</div></div>
         <div><div class="caption">Location</div><div style="font-weight:600;margin-top:4px;">{{ event.location || '—' }}</div></div>
       </div>
+      <div style="display:flex;gap:8px;margin-top:var(--space-4);">
+        <Button label="RSVP Yes" size="small" severity="success" @click="handleRsvp(RsvpStatus.YES)" />
+        <Button label="RSVP Maybe" size="small" severity="warn" @click="handleRsvp(RsvpStatus.MAYBE)" />
+        <Button label="RSVP No" size="small" severity="secondary" @click="handleRsvp(RsvpStatus.NO)" />
+      </div>
     </div>
 
-    <div class="content-card">
+    <div class="content-card" v-if="auth.isAdminOrHR">
       <h3 style="margin-bottom:var(--space-4);">Attendees ({{ totalAttendees }})</h3>
       <DataTable :value="attendees" :loading="loading" stripedRows>
         <Column field="fullName" header="Name" />
@@ -91,6 +115,9 @@ onMounted(() => {
           </template>
         </Column>
       </DataTable>
+    </div>
+    <div v-else class="content-card">
+      <p class="page-subtitle" style="margin:0;">You can RSVP above. Attendee list is visible to Admin/HR only.</p>
     </div>
   </div>
 </template>

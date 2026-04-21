@@ -3,6 +3,7 @@ import type {
   MenuItemRequest, MenuItemResponse,
   OrderSessionRequest, OrderSessionResponse,
   UserOrderRequest, UserOrderResponse,
+  OrderSessionSummaryResponse,
   Page, Pageable
 } from '@/types'
 import type { OrderSessionStatus } from '@/types'
@@ -17,9 +18,21 @@ export const ordersApi = {
     return http.post<MenuItemResponse>('/orders/menu-items', data)
   },
 
+  updateMenuItem(id: number, data: MenuItemRequest) {
+    return http.put<MenuItemResponse>(`/orders/menu-items/${id}`, data)
+  },
+
+  deleteMenuItem(id: number) {
+    return http.delete<void>(`/orders/menu-items/${id}`)
+  },
+
   // Sessions
   getSessions(params?: Pageable) {
     return http.get<Page<OrderSessionResponse>>('/orders/sessions', { params })
+  },
+
+  getSessionSummary(sessionId: number) {
+    return http.get<OrderSessionSummaryResponse>(`/orders/sessions/${sessionId}/summary`)
   },
 
   createSession(data: OrderSessionRequest) {

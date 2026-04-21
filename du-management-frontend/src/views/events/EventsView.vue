@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { eventsApi } from '@/api/events'
 import type { EventResponse, EventRequest } from '@/types'
+import { RsvpStatus } from '@/types'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -46,6 +47,19 @@ async function save() {
   } catch (err: any) { toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message || 'Failed', life: 4000 }) }
 }
 
+async function rsvp(eventId: number, status: RsvpStatus) {
+  if (!auth.userId) {
+    toast.add({ severity: 'error', summary: 'Cannot RSVP', detail: 'Missing user identity. Please log in again.', life: 3000 })
+    return
+  }
+  try {
+    await eventsApi.rsvp(eventId, { userId: auth.userId, rsvpStatus: status })
+    toast.add({ severity: 'success', summary: `RSVP ${status}`, life: 2000 })
+  } catch (err: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message || 'RSVP failed', life: 3000 })
+  }
+}
+
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '' }
 
 onMounted(load)
@@ -64,6 +78,15 @@ onMounted(load)
         </Column>
         <Column field="eventDate" header="Date"><template #body="{ data }">{{ formatDate(data.eventDate) }}</template></Column>
         <Column field="location" header="Location" />
+        <Column header="RSVP" style="width: 190px">
+          <template #body="{ data }">
+            <div style="display:flex;gap:4px;">
+              <Button label="Yes" size="small" severity="success" text @click="rsvp(data.id, RsvpStatus.YES)" />
+              <Button label="Maybe" size="small" severity="warn" text @click="rsvp(data.id, RsvpStatus.MAYBE)" />
+              <Button label="No" size="small" severity="secondary" text @click="rsvp(data.id, RsvpStatus.NO)" />
+            </div>
+          </template>
+        </Column>
         <Column v-if="auth.isAdminOrHR" header="Actions" style="width: 100px">
           <template #body="{ data }"><Button icon="pi pi-pencil" text rounded severity="info" @click="openEdit(data)" /></template>
         </Column>

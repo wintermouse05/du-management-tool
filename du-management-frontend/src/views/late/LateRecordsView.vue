@@ -42,6 +42,21 @@ const sumYear = ref(new Date().getFullYear()); const sumMonth = ref(new Date().g
 
 async function loadSummary() { sumLoading.value = true; try { const r = await lateRecordsApi.getMonthlySummary(sumYear.value, sumMonth.value, { size: 100 }); summaries.value = r.data.content } finally { sumLoading.value = false } }
 
+async function exportCsv() {
+  try {
+    const params = activeTab.value === '1' ? { year: sumYear.value, month: sumMonth.value } : undefined
+    const res = await lateRecordsApi.exportCsv(params)
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = 'late-records.csv'
+    link.click()
+    URL.revokeObjectURL(link.href)
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Export failed', detail: e.response?.data?.message || 'Unable to export records', life: 3000 })
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -49,7 +64,10 @@ onMounted(load)
   <div class="page-container">
     <div class="page-header">
       <div><h2>Late Records</h2><p class="page-subtitle">Track and manage late arrivals</p></div>
-      <Button label="Add Record" icon="pi pi-plus" @click="dialog=true" />
+      <div style="display:flex;gap:8px;">
+        <Button label="Export CSV" icon="pi pi-download" severity="secondary" outlined @click="exportCsv" />
+        <Button label="Add Record" icon="pi pi-plus" @click="dialog=true" />
+      </div>
     </div>
     <div class="content-card">
       <Tabs :value="activeTab">

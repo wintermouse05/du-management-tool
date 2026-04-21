@@ -21,6 +21,14 @@ export const seminarsApi = {
     return http.put<SeminarResponse>(`/seminars/${id}`, data)
   },
 
+  uploadMaterials(id: number, file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+    return http.post<SeminarResponse>(`/seminars/${id}/materials`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+
   vote(seminarId: number, data: SeminarVoteRequest) {
     return http.post<SeminarVoteResponse>(`/seminars/${seminarId}/vote`, data)
   },

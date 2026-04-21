@@ -16,8 +16,8 @@ export enum RsvpStatus {
 export enum SeminarStatus {
   PROPOSED = 'PROPOSED',
   APPROVED = 'APPROVED',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED',
+  SCHEDULED = 'SCHEDULED',
+  DONE = 'DONE',
 }
 
 export enum OrderSessionStatus {
@@ -101,6 +101,7 @@ export interface MemberResponse {
   fullName: string
   dob: string | null
   joinDate: string | null
+  tenureMonths: number | null
   totalPoints: number
   status: UserStatus
 }
@@ -154,6 +155,7 @@ export interface SeminarResponse {
   title: string
   description: string | null
   scheduledAt: string | null
+  materialsUrl: string | null
   status: SeminarStatus
 }
 
@@ -213,6 +215,22 @@ export interface UserOrderResponse {
   quantity: number
   note: string | null
   paid: boolean
+}
+
+export interface OrderItemSummaryResponse {
+  itemId: number
+  itemName: string
+  unitPrice: number
+  totalQuantity: number
+  totalAmount: number
+}
+
+export interface OrderSessionSummaryResponse {
+  sessionId: number
+  totalOrderLines: number
+  totalQuantity: number
+  grandTotal: number
+  items: OrderItemSummaryResponse[]
 }
 
 // ============================================================
@@ -323,6 +341,7 @@ export interface LuckyDrawSessionResponse {
   eventId: number
   eventName: string
   name: string
+  participantCount: number
 }
 
 export interface LuckyDrawPrizeRequest {
@@ -350,6 +369,12 @@ export interface LuckyDrawWinnerResponse {
   prizeName: string
   userId: number
   fullName: string
+}
+
+export interface LuckyDrawParticipantResponse {
+  userId: number
+  fullName: string
+  email: string
 }
 
 // ============================================================
@@ -414,4 +439,19 @@ export interface NotificationInboxResponse {
 
 export interface NotificationUnreadCountResponse {
   unreadCount: number
+}
+
+export type NotificationChannelType = 'EMAIL' | 'WEBHOOK'
+
+export interface NotificationChannelRequest {
+  type: NotificationChannelType
+  endpoint: string
+  enabled: boolean
+}
+
+export interface NotificationChannelResponse {
+  id: number
+  type: NotificationChannelType
+  endpoint: string
+  enabled: boolean
 }

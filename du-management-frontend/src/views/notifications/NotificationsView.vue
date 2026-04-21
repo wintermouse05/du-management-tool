@@ -3,6 +3,8 @@ import { ref, onMounted } from 'vue'
 import { notificationsApi } from '@/api/notifications'
 import type {
   NotificationJobResponse,
+  NotificationChannelRequest,
+  NotificationChannelResponse,
   NotificationTemplateRequest,
   NotificationTemplateResponse,
 } from '@/types'
@@ -20,8 +22,10 @@ import { useToast } from 'primevue/usetoast'
 const toast = useToast()
 const jobs = ref<NotificationJobResponse[]>([])
 const templates = ref<NotificationTemplateResponse[]>([])
+const channels = ref<NotificationChannelResponse[]>([])
 const loading = ref(false)
 const templatesLoading = ref(false)
+const channelsLoading = ref(false)
 const surveyId = ref<number>(0)
 
 const templateDialogVisible = ref(false)
@@ -38,9 +42,22 @@ const enabledOptions = [
   { label: 'Enabled', value: true },
   { label: 'Disabled', value: false },
 ]
+const channelTypeOptions = [
+  { label: 'EMAIL', value: 'EMAIL' },
+  { label: 'WEBHOOK', value: 'WEBHOOK' },
+]
+
+const channelDialogVisible = ref(false)
+const editingChannel = ref(false)
+const editingChannelId = ref<number | null>(null)
+const channelForm = ref<NotificationChannelRequest>({
+  type: 'WEBHOOK',
+  endpoint: '',
+  enabled: true,
+})
 
 onMounted(async () => {
-  await Promise.all([loadJobs(), loadTemplates()])
+  await Promise.all([loadJobs(), loadTemplates(), loadChannels()])
 })
 
 async function loadJobs() {
@@ -60,6 +77,16 @@ async function loadTemplates() {
     templates.value = r.data
   } finally {
     templatesLoading.value = false
+  }
+}
+
+async function loadChannels() {
+  channelsLoading.value = true
+  try {
+    const r = await notificationsApi.getChannels()
+    channels.value = r.data
+  } finally {
+    channelsLoading.value = false
   }
 }
 
@@ -135,6 +162,53 @@ async function deleteTemplate(template: NotificationTemplateResponse) {
   }
 }
 
+function openCreateChannel() {
+  editingChannel.value = false
+  editingChannelId.value = null
+  channelForm.value = {
+    type: 'WEBHOOK',
+    endpoint: '',
+    enabled: true,
+  }
+  channelDialogVisible.value = true
+}
+
+function openEditChannel(channel: NotificationChannelResponse) {
+  editingChannel.value = true
+  editingChannelId.value = channel.id
+  channelForm.value = {
+    type: channel.type,
+    endpoint: channel.endpoint,
+    enabled: channel.enabled,
+  }
+  channelDialogVisible.value = true
+}
+
+async function saveChannel() {
+  try {
+    if (editingChannel.value && editingChannelId.value) {
+      await notificationsApi.updateChannel(editingChannelId.value, channelForm.value)
+    } else {
+      await notificationsApi.createChannel(channelForm.value)
+    }
+    toast.add({ severity: 'success', summary: 'Saved channel', life: 2500 })
+    channelDialogVisible.value = false
+    await loadChannels()
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message, life: 3000 })
+  }
+}
+
+async function deleteChannel(channel: NotificationChannelResponse) {
+  try {
+    await notificationsApi.deleteChannel(channel.id)
+    toast.add({ severity: 'warn', summary: 'Channel deleted', life: 2500 })
+    await loadChannels()
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message, life: 3000 })
+  }
+}
+
 function formatDate(dateTime: string | null): string {
   if (!dateTime) return 'Never'
   const parsed = new Date(dateTime)
@@ -194,6 +268,26 @@ function formatDate(dateTime: string | null): string {
       </DataTable>
     </div>
 
+    <div class="content-card" style="margin-bottom:var(--space-6);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-4);">
+        <h3>Notification Channels</h3>
+        <Button label="Add Channel" icon="pi pi-plus" size="small" @click="openCreateChannel" />
+      </div>
+      <DataTable :value="channels" :loading="channelsLoading" stripedRows>
+        <Column field="type" header="Type" />
+        <Column field="endpoint" header="Endpoint" />
+        <Column field="enabled" header="Status">
+          <template #body="{ data }"><Tag :value="data.enabled ? 'Enabled' : 'Disabled'" :severity="data.enabled ? 'success' : 'secondary'" /></template>
+        </Column>
+        <Column header="Actions" style="width:150px">
+          <template #body="{ data }">
+            <Button icon="pi pi-pencil" text rounded severity="info" @click="openEditChannel(data)" />
+            <Button icon="pi pi-trash" text rounded severity="danger" @click="deleteChannel(data)" />
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+
     <div class="content-card">
       <h3 style="margin-bottom:var(--space-4);">Manual Trigger</h3>
       <div style="display:flex;gap:var(--space-3);align-items:flex-end;">
@@ -228,6 +322,27 @@ function formatDate(dateTime: string | null): string {
       <template #footer>
         <Button label="Cancel" text @click="templateDialogVisible = false" />
         <Button :label="editingTemplate ? 'Update' : 'Create'" icon="pi pi-check" @click="saveTemplate" />
+      </template>
+    </Dialog>
+
+    <Dialog v-model:visible="channelDialogVisible" :header="editingChannel ? 'Edit Channel' : 'Add Channel'" modal :style="{ width: '520px' }">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+        <div class="form-field">
+          <label>Type</label>
+          <Select v-model="channelForm.type" :options="channelTypeOptions" optionLabel="label" optionValue="value" fluid />
+        </div>
+        <div class="form-field">
+          <label>Status</label>
+          <Select v-model="channelForm.enabled" :options="enabledOptions" optionLabel="label" optionValue="value" fluid />
+        </div>
+        <div class="form-field" style="grid-column:1 / -1;">
+          <label>Endpoint</label>
+          <InputText v-model="channelForm.endpoint" placeholder="Webhook URL or email channel identifier" fluid />
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" text @click="channelDialogVisible = false" />
+        <Button :label="editingChannel ? 'Update' : 'Create'" icon="pi pi-check" @click="saveChannel" />
       </template>
     </Dialog>
   </div>
