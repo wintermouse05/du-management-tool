@@ -4,8 +4,9 @@ import org.example.dumanagementbackend.dto.member.MemberRequest;
 import org.example.dumanagementbackend.dto.member.MemberResponse;
 import org.example.dumanagementbackend.service.MemberService;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,8 +32,8 @@ public class MemberController {
     }
 
     @GetMapping
-    public ResponseEntity<List<MemberResponse>> getAll() {
-        return ResponseEntity.ok(memberService.getAll());
+    public ResponseEntity<Page<MemberResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(memberService.getAll(pageable));
     }
 
     @GetMapping("/{id}")

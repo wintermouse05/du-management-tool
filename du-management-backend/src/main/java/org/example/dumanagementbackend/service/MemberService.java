@@ -8,14 +8,16 @@ import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.RoleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class MemberService {
 
     private final UserRepository userRepository;
@@ -32,8 +34,8 @@ public class MemberService {
         return toResponse(userRepository.save(user));
     }
 
-    public List<MemberResponse> getAll() {
-        return userRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<MemberResponse> getAll(Pageable pageable) {
+        return userRepository.findAll(pageable).map(this::toResponse);
     }
 
     public MemberResponse getById(Long id) {

@@ -16,20 +16,25 @@ import org.example.dumanagementbackend.repository.MenuItemRepository;
 import org.example.dumanagementbackend.repository.OrderSessionRepository;
 import org.example.dumanagementbackend.repository.UserOrderRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class OrderService {
 
     private final MenuItemRepository menuItemRepository;
     private final OrderSessionRepository orderSessionRepository;
     private final UserOrderRepository userOrderRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
+    @Transactional
     public MenuItemResponse createMenuItem(MenuItemRequest request) {
         MenuItem item = new MenuItem();
         item.setName(request.name());
@@ -37,19 +42,22 @@ public class OrderService {
         return toMenuItemResponse(menuItemRepository.save(item));
     }
 
-    public List<MenuItemResponse> getMenuItems() {
-        return menuItemRepository.findAll().stream().map(this::toMenuItemResponse).toList();
+    public Page<MenuItemResponse> getMenuItems(Pageable pageable) {
+        return menuItemRepository.findAll(pageable).map(this::toMenuItemResponse);
     }
 
+    @Transactional
     public OrderSessionResponse createSession(OrderSessionRequest request) {
         OrderSession session = new OrderSession();
         session.setStatus(request.status() != null ? request.status() : OrderSessionStatus.OPEN);
         session.setDeadline(request.deadline());
-        return toSessionResponse(orderSessionRepository.save(session));
+        OrderSessionResponse response = toSessionResponse(orderSessionRepository.save(session));
+        messagingTemplate.convertAndSend("/topic/orders", "SESSION_CREATED");
+        return response;
     }
 
-    public List<OrderSessionResponse> getSessions() {
-        return orderSessionRepository.findAll().stream().map(this::toSessionResponse).toList();
+    public Page<OrderSessionResponse> getSessions(Pageable pageable) {
+        return orderSessionRepository.findAll(pageable).map(this::toSessionResponse);
     }
 
     @Transactional
@@ -57,7 +65,9 @@ public class OrderService {
         OrderSession session = orderSessionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order session not found with id=" + id));
         session.setStatus(status);
-        return toSessionResponse(orderSessionRepository.save(session));
+        OrderSessionResponse response = toSessionResponse(orderSessionRepository.save(session));
+        messagingTemplate.convertAndSend("/topic/orders", "SESSION_UPDATED");
+        return response;
     }
 
     @Transactional
@@ -76,11 +86,14 @@ public class OrderService {
         order.setQuantity(request.quantity());
         order.setNote(request.note());
         order.setPaid(Boolean.TRUE.equals(request.paid()));
-        return toUserOrderResponse(userOrderRepository.save(order));
+        
+        UserOrderResponse response = toUserOrderResponse(userOrderRepository.save(order));
+        messagingTemplate.convertAndSend("/topic/orders", "ORDER_PLACED");
+        return response;
     }
 
-    public List<UserOrderResponse> getOrdersBySession(Long sessionId) {
-        return userOrderRepository.findBySessionId(sessionId).stream().map(this::toUserOrderResponse).toList();
+    public Page<UserOrderResponse> getOrdersBySession(Long sessionId, Pageable pageable) {
+        return userOrderRepository.findBySessionId(sessionId, pageable).map(this::toUserOrderResponse);
     }
 
     @Transactional
@@ -88,7 +101,9 @@ public class OrderService {
         UserOrder order = userOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id=" + orderId));
         order.setPaid(paid);
-        return toUserOrderResponse(userOrderRepository.save(order));
+        UserOrderResponse response = toUserOrderResponse(userOrderRepository.save(order));
+        messagingTemplate.convertAndSend("/topic/orders", "ORDER_UPDATED");
+        return response;
     }
 
     private MenuItemResponse toMenuItemResponse(MenuItem item) {

@@ -9,8 +9,9 @@ import org.example.dumanagementbackend.dto.order.UserOrderResponse;
 import org.example.dumanagementbackend.entity.enums.OrderSessionStatus;
 import org.example.dumanagementbackend.service.OrderService;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,8 +38,8 @@ public class OrderController {
     }
 
     @GetMapping("/menu-items")
-    public ResponseEntity<List<MenuItemResponse>> getMenuItems() {
-        return ResponseEntity.ok(orderService.getMenuItems());
+    public ResponseEntity<Page<MenuItemResponse>> getMenuItems(Pageable pageable) {
+        return ResponseEntity.ok(orderService.getMenuItems(pageable));
     }
 
     @PostMapping("/sessions")
@@ -48,8 +49,8 @@ public class OrderController {
     }
 
     @GetMapping("/sessions")
-    public ResponseEntity<List<OrderSessionResponse>> getSessions() {
-        return ResponseEntity.ok(orderService.getSessions());
+    public ResponseEntity<Page<OrderSessionResponse>> getSessions(Pageable pageable) {
+        return ResponseEntity.ok(orderService.getSessions(pageable));
     }
 
     @PatchMapping("/sessions/status")
@@ -67,8 +68,8 @@ public class OrderController {
     }
 
     @GetMapping("/user-orders")
-    public ResponseEntity<List<UserOrderResponse>> getOrdersBySession(@RequestParam Long sessionId) {
-        return ResponseEntity.ok(orderService.getOrdersBySession(sessionId));
+    public ResponseEntity<Page<UserOrderResponse>> getOrdersBySession(@RequestParam Long sessionId, Pageable pageable) {
+        return ResponseEntity.ok(orderService.getOrdersBySession(sessionId, pageable));
     }
 
     @PatchMapping("/user-orders/paid")

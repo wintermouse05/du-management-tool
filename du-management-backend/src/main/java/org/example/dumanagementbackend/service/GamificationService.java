@@ -14,19 +14,24 @@ import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.PointHistoryRepository;
 import org.example.dumanagementbackend.repository.PointRuleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class GamificationService {
 
     private final PointRuleRepository pointRuleRepository;
     private final PointHistoryRepository pointHistoryRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
+    @Transactional
     public PointRuleResponse createRule(PointRuleRequest request) {
         PointRule rule = new PointRule();
         rule.setActionCode(request.actionCode());
@@ -34,10 +39,11 @@ public class GamificationService {
         return toRuleResponse(pointRuleRepository.save(rule));
     }
 
-    public List<PointRuleResponse> getRules() {
-        return pointRuleRepository.findAll().stream().map(this::toRuleResponse).toList();
+    public Page<PointRuleResponse> getRules(Pageable pageable) {
+        return pointRuleRepository.findAll(pageable).map(this::toRuleResponse);
     }
 
+    @Transactional
     public PointRuleResponse updateRule(Long id, PointRuleRequest request) {
         PointRule rule = pointRuleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Point rule not found with id=" + id));
@@ -73,19 +79,21 @@ public class GamificationService {
         user.setTotalPoints(user.getTotalPoints() + points);
         userRepository.save(user);
 
-        return toHistoryResponse(pointHistoryRepository.save(history));
+        PointHistoryResponse response = toHistoryResponse(pointHistoryRepository.save(history));
+        
+        // Broadcast leaderboard update
+        messagingTemplate.convertAndSend("/topic/leaderboard", "UPDATE");
+        
+        return response;
     }
 
-    public List<PointHistoryResponse> getUserHistory(Long userId) {
-        return pointHistoryRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::toHistoryResponse)
-                .toList();
+    public Page<PointHistoryResponse> getUserHistory(Long userId, Pageable pageable) {
+        return pointHistoryRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable).map(this::toHistoryResponse);
     }
 
-    public List<LeaderboardEntryResponse> leaderboard() {
-        return userRepository.findByStatusOrderByTotalPointsDesc(UserStatus.ACTIVE).stream()
-                .map(user -> new LeaderboardEntryResponse(user.getId(), user.getFullName(), user.getTotalPoints()))
-                .toList();
+    public Page<LeaderboardEntryResponse> leaderboard(Pageable pageable) {
+        return userRepository.findByStatusOrderByTotalPointsDesc(UserStatus.ACTIVE, pageable)
+                .map(user -> new LeaderboardEntryResponse(user.getId(), user.getFullName(), user.getTotalPoints()));
     }
 
     private PointRuleResponse toRuleResponse(PointRule rule) {

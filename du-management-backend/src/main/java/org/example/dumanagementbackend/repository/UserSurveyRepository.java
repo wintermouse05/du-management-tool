@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface UserSurveyRepository extends JpaRepository<UserSurvey, UserSurveyId> {
 
     List<UserSurvey> findBySurveyId(Long surveyId);
+
+    List<UserSurvey> findBySurveyIdAndCompletedFalse(Long surveyId);
 }

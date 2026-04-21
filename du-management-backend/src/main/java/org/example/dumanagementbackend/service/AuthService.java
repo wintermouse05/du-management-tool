@@ -16,9 +16,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class AuthService {
 
     private final AuthenticationManager authenticationManager;
@@ -37,7 +39,7 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found for username/email=" + request.username()));
 
         String token = jwtService.generateToken(user.getUsername(), user.getRole().getName());
-        return new LoginResponse(token, "Bearer", user.getUsername(), user.getRole().getName());
+        return new LoginResponse(token, "Bearer", user.getUsername(), user.getRole().getName(), user.getId());
     }
 
     public LoginResponse register(RegisterRequest request) {
@@ -72,7 +74,7 @@ public class AuthService {
 
         User saved = userRepository.save(user);
         String token = jwtService.generateToken(saved.getUsername(), saved.getRole().getName());
-        return new LoginResponse(token, "Bearer", saved.getUsername(), saved.getRole().getName());
+        return new LoginResponse(token, "Bearer", saved.getUsername(), saved.getRole().getName(), saved.getId());
     }
 
     public void logout() {

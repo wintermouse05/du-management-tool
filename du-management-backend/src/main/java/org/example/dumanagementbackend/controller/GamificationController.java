@@ -7,8 +7,9 @@ import org.example.dumanagementbackend.dto.gamification.PointRuleRequest;
 import org.example.dumanagementbackend.dto.gamification.PointRuleResponse;
 import org.example.dumanagementbackend.service.GamificationService;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,8 +36,8 @@ public class GamificationController {
     }
 
     @GetMapping("/rules")
-    public ResponseEntity<List<PointRuleResponse>> getRules() {
-        return ResponseEntity.ok(gamificationService.getRules());
+    public ResponseEntity<Page<PointRuleResponse>> getRules(Pageable pageable) {
+        return ResponseEntity.ok(gamificationService.getRules(pageable));
     }
 
     @PutMapping("/rules/{id}")
@@ -52,12 +53,12 @@ public class GamificationController {
     }
 
     @GetMapping("/points/history/{userId}")
-    public ResponseEntity<List<PointHistoryResponse>> getUserHistory(@PathVariable Long userId) {
-        return ResponseEntity.ok(gamificationService.getUserHistory(userId));
+    public ResponseEntity<Page<PointHistoryResponse>> getUserHistory(@PathVariable Long userId, Pageable pageable) {
+        return ResponseEntity.ok(gamificationService.getUserHistory(userId, pageable));
     }
 
     @GetMapping("/leaderboard")
-    public ResponseEntity<List<LeaderboardEntryResponse>> leaderboard() {
-        return ResponseEntity.ok(gamificationService.leaderboard());
+    public ResponseEntity<Page<LeaderboardEntryResponse>> leaderboard(Pageable pageable) {
+        return ResponseEntity.ok(gamificationService.leaderboard(pageable));
     }
 }

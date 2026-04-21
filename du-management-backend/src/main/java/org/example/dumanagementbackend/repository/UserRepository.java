@@ -5,6 +5,8 @@ import java.util.Optional;
 
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -18,4 +20,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
 
     List<User> findByStatusOrderByTotalPointsDesc(UserStatus status);
+
+    Page<User> findByStatusOrderByTotalPointsDesc(UserStatus status, Pageable pageable);
 }

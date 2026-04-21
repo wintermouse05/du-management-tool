@@ -14,13 +14,15 @@ import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.EventAttendeeRepository;
 import org.example.dumanagementbackend.repository.EventRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class EventService {
 
     private final EventRepository eventRepository;
@@ -34,8 +36,8 @@ public class EventService {
         return toResponse(eventRepository.save(event));
     }
 
-    public List<EventResponse> getAll() {
-        return eventRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<EventResponse> getAll(Pageable pageable) {
+        return eventRepository.findAll(pageable).map(this::toResponse);
     }
 
     public EventResponse getById(Long id) {
@@ -92,8 +94,8 @@ public class EventService {
         return toAttendeeResponse(eventAttendeeRepository.save(attendee));
     }
 
-    public List<EventAttendeeResponse> getAttendees(Long eventId) {
-        return eventAttendeeRepository.findByEventId(eventId).stream().map(this::toAttendeeResponse).toList();
+    public Page<EventAttendeeResponse> getAttendees(Long eventId, Pageable pageable) {
+        return eventAttendeeRepository.findByEventId(eventId, pageable).map(this::toAttendeeResponse);
     }
 
     public Event getEntityById(Long id) {

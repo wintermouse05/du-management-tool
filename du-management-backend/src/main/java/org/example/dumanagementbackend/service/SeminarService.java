@@ -14,13 +14,15 @@ import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.SeminarRepository;
 import org.example.dumanagementbackend.repository.SeminarVoteRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class SeminarService {
 
     private final SeminarRepository seminarRepository;
@@ -34,8 +36,8 @@ public class SeminarService {
         return toResponse(seminarRepository.save(seminar));
     }
 
-    public List<SeminarResponse> getAll() {
-        return seminarRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<SeminarResponse> getAll(Pageable pageable) {
+        return seminarRepository.findAll(pageable).map(this::toResponse);
     }
 
     public SeminarResponse getById(Long id) {
@@ -72,10 +74,9 @@ public class SeminarService {
         return new SeminarVoteResponse(saved.getSeminar().getId(), saved.getUser().getId(), saved.getVoteType());
     }
 
-    public List<SeminarVoteResponse> getVotes(Long seminarId) {
-        return seminarVoteRepository.findBySeminarId(seminarId).stream()
-                .map(v -> new SeminarVoteResponse(v.getSeminar().getId(), v.getUser().getId(), v.getVoteType()))
-                .toList();
+    public Page<SeminarVoteResponse> getVotes(Long seminarId, Pageable pageable) {
+        return seminarVoteRepository.findBySeminarId(seminarId, pageable)
+                .map(v -> new SeminarVoteResponse(v.getSeminar().getId(), v.getUser().getId(), v.getVoteType()));
     }
 
     public Seminar getEntityById(Long id) {

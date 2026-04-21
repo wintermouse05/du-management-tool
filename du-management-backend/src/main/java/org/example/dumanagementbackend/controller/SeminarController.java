@@ -6,8 +6,9 @@ import org.example.dumanagementbackend.dto.seminar.SeminarVoteRequest;
 import org.example.dumanagementbackend.dto.seminar.SeminarVoteResponse;
 import org.example.dumanagementbackend.service.SeminarService;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,8 +34,8 @@ public class SeminarController {
     }
 
     @GetMapping
-    public ResponseEntity<List<SeminarResponse>> getAll() {
-        return ResponseEntity.ok(seminarService.getAll());
+    public ResponseEntity<Page<SeminarResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(seminarService.getAll(pageable));
     }
 
     @GetMapping("/{id}")
@@ -54,7 +55,7 @@ public class SeminarController {
     }
 
     @GetMapping("/{id}/votes")
-    public ResponseEntity<List<SeminarVoteResponse>> getVotes(@PathVariable Long id) {
-        return ResponseEntity.ok(seminarService.getVotes(id));
+    public ResponseEntity<Page<SeminarVoteResponse>> getVotes(@PathVariable Long id, Pageable pageable) {
+        return ResponseEntity.ok(seminarService.getVotes(id, pageable));
     }
 }

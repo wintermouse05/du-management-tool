@@ -20,7 +20,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class EventAttendee {
+public class EventAttendee extends AuditableEntity {
 
     @EmbeddedId
     private EventAttendeeId id;

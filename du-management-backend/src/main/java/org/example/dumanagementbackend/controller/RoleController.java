@@ -4,8 +4,9 @@ import org.example.dumanagementbackend.dto.system.RoleRequest;
 import org.example.dumanagementbackend.dto.system.RoleResponse;
 import org.example.dumanagementbackend.service.RoleService;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,8 +33,8 @@ public class RoleController {
     }
 
     @GetMapping
-    public ResponseEntity<List<RoleResponse>> getAll() {
-        return ResponseEntity.ok(roleService.getAll());
+    public ResponseEntity<Page<RoleResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(roleService.getAll(pageable));
     }
 
     @GetMapping("/{id}")

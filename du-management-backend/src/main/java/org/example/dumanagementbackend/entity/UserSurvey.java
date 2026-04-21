@@ -18,7 +18,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class UserSurvey {
+public class UserSurvey extends AuditableEntity {
 
     @EmbeddedId
     private UserSurveyId id;

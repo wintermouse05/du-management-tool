@@ -6,8 +6,9 @@ import org.example.dumanagementbackend.dto.survey.SurveyRequest;
 import org.example.dumanagementbackend.dto.survey.SurveyResponse;
 import org.example.dumanagementbackend.service.SurveyService;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,8 +36,8 @@ public class SurveyController {
     }
 
     @GetMapping
-    public ResponseEntity<List<SurveyResponse>> getAll() {
-        return ResponseEntity.ok(surveyService.getAll());
+    public ResponseEntity<Page<SurveyResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(surveyService.getAll(pageable));
     }
 
     @GetMapping("/{id}")

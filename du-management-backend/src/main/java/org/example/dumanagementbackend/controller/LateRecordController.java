@@ -5,8 +5,9 @@ import org.example.dumanagementbackend.dto.late.LateRecordResponse;
 import org.example.dumanagementbackend.dto.late.LateSummaryResponse;
 import org.example.dumanagementbackend.service.LateRecordService;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,18 +34,22 @@ public class LateRecordController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<List<LateRecordResponse>> getAll() {
-        return ResponseEntity.ok(lateRecordService.getAll());
+    public ResponseEntity<Page<LateRecordResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(lateRecordService.getAll(pageable));
     }
 
     @GetMapping("/by-user")
-    public ResponseEntity<List<LateRecordResponse>> getByUser(@RequestParam Long userId) {
-        return ResponseEntity.ok(lateRecordService.getByUser(userId));
+    public ResponseEntity<Page<LateRecordResponse>> getByUser(@RequestParam Long userId, Pageable pageable) {
+        return ResponseEntity.ok(lateRecordService.getByUser(userId, pageable));
     }
 
     @GetMapping("/monthly-summary")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<List<LateSummaryResponse>> monthlySummary(@RequestParam int year, @RequestParam int month) {
-        return ResponseEntity.ok(lateRecordService.getMonthlySummary(year, month));
+    public ResponseEntity<Page<LateSummaryResponse>> monthlySummary(
+            @RequestParam int year,
+            @RequestParam int month,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(lateRecordService.getMonthlySummary(year, month, pageable));
     }
 }

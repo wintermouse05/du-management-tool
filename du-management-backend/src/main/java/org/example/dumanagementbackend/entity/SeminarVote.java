@@ -19,7 +19,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class SeminarVote {
+public class SeminarVote extends AuditableEntity {
 
     @EmbeddedId
     private SeminarVoteId id;

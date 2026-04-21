@@ -15,16 +15,21 @@ import org.example.dumanagementbackend.repository.UserSurveyRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class SurveyService {
 
     private final SurveyRepository surveyRepository;
     private final UserRepository userRepository;
     private final UserSurveyRepository userSurveyRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     public SurveyResponse create(SurveyRequest request) {
@@ -33,8 +38,8 @@ public class SurveyService {
         return toResponse(surveyRepository.save(survey));
     }
 
-    public List<SurveyResponse> getAll() {
-        return surveyRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<SurveyResponse> getAll(Pageable pageable) {
+        return surveyRepository.findAll(pageable).map(this::toResponse);
     }
 
     public SurveyResponse getById(Long id) {
@@ -87,7 +92,12 @@ public class SurveyService {
         userSurvey.setCompletedAt(request.completed() ? LocalDateTime.now() : null);
         userSurveyRepository.save(userSurvey);
 
-        return getProgress(surveyId);
+        SurveyProgressResponse progress = getProgress(surveyId);
+        
+        // Broadcast progress update
+        messagingTemplate.convertAndSend("/topic/surveys/" + surveyId, progress);
+        
+        return progress;
     }
 
     public SurveyProgressResponse getProgress(Long surveyId) {

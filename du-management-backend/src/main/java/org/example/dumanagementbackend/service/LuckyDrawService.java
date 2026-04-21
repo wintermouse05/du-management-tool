@@ -18,13 +18,16 @@ import org.example.dumanagementbackend.repository.LuckyDrawPrizeRepository;
 import org.example.dumanagementbackend.repository.LuckyDrawSessionRepository;
 import org.example.dumanagementbackend.repository.LuckyDrawWinnerRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class LuckyDrawService {
 
     private final LuckyDrawSessionRepository sessionRepository;
@@ -32,6 +35,7 @@ public class LuckyDrawService {
     private final LuckyDrawWinnerRepository winnerRepository;
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     public LuckyDrawSessionResponse createSession(LuckyDrawSessionRequest request) {
@@ -43,8 +47,8 @@ public class LuckyDrawService {
         return toSessionResponse(sessionRepository.save(session));
     }
 
-    public List<LuckyDrawSessionResponse> getSessionsByEvent(Long eventId) {
-        return sessionRepository.findByEventId(eventId).stream().map(this::toSessionResponse).toList();
+    public Page<LuckyDrawSessionResponse> getSessionsByEvent(Long eventId, Pageable pageable) {
+        return sessionRepository.findByEventId(eventId, pageable).map(this::toSessionResponse);
     }
 
     @Transactional
@@ -58,8 +62,8 @@ public class LuckyDrawService {
         return toPrizeResponse(prizeRepository.save(prize));
     }
 
-    public List<LuckyDrawPrizeResponse> getPrizesBySession(Long sessionId) {
-        return prizeRepository.findBySessionId(sessionId).stream().map(this::toPrizeResponse).toList();
+    public Page<LuckyDrawPrizeResponse> getPrizesBySession(Long sessionId, Pageable pageable) {
+        return prizeRepository.findBySessionId(sessionId, pageable).map(this::toPrizeResponse);
     }
 
     @Transactional
@@ -69,7 +73,7 @@ public class LuckyDrawService {
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
 
-        int assignedCount = winnerRepository.findByPrizeId(request.prizeId()).size();
+        long assignedCount = winnerRepository.countByPrizeId(request.prizeId());
         if (assignedCount >= prize.getQuantity()) {
             throw new BadRequestException("All prize slots have already been assigned for prizeId=" + request.prizeId());
         }
@@ -77,11 +81,17 @@ public class LuckyDrawService {
         LuckyDrawWinner winner = new LuckyDrawWinner();
         winner.setPrize(prize);
         winner.setUser(user);
-        return toWinnerResponse(winnerRepository.save(winner));
+        
+        LuckyDrawWinnerResponse response = toWinnerResponse(winnerRepository.save(winner));
+        
+        // Broadcast the winner
+        messagingTemplate.convertAndSend("/topic/lucky-draw", response);
+        
+        return response;
     }
 
-    public List<LuckyDrawWinnerResponse> getWinnersByPrize(Long prizeId) {
-        return winnerRepository.findByPrizeId(prizeId).stream().map(this::toWinnerResponse).toList();
+    public Page<LuckyDrawWinnerResponse> getWinnersByPrize(Long prizeId, Pageable pageable) {
+        return winnerRepository.findByPrizeId(prizeId, pageable).map(this::toWinnerResponse);
     }
 
     private LuckyDrawSessionResponse toSessionResponse(LuckyDrawSession session) {

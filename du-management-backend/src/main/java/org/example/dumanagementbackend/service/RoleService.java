@@ -5,12 +5,15 @@ import org.example.dumanagementbackend.dto.system.RoleResponse;
 import org.example.dumanagementbackend.entity.Role;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.RoleRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class RoleService {
 
     private final RoleRepository roleRepository;
@@ -22,8 +25,8 @@ public class RoleService {
         return toResponse(roleRepository.save(role));
     }
 
-    public List<RoleResponse> getAll() {
-        return roleRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<RoleResponse> getAll(Pageable pageable) {
+        return roleRepository.findAll(pageable).map(this::toResponse);
     }
 
     public RoleResponse getById(Long id) {

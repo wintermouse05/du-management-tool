@@ -8,8 +8,9 @@ import org.example.dumanagementbackend.dto.luckydraw.LuckyDrawWinnerRequest;
 import org.example.dumanagementbackend.dto.luckydraw.LuckyDrawWinnerResponse;
 import org.example.dumanagementbackend.service.LuckyDrawService;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,8 +36,8 @@ public class LuckyDrawController {
     }
 
     @GetMapping("/sessions")
-    public ResponseEntity<List<LuckyDrawSessionResponse>> getSessionsByEvent(@RequestParam Long eventId) {
-        return ResponseEntity.ok(luckyDrawService.getSessionsByEvent(eventId));
+    public ResponseEntity<Page<LuckyDrawSessionResponse>> getSessionsByEvent(@RequestParam Long eventId, Pageable pageable) {
+        return ResponseEntity.ok(luckyDrawService.getSessionsByEvent(eventId, pageable));
     }
 
     @PostMapping("/prizes")
@@ -46,8 +47,8 @@ public class LuckyDrawController {
     }
 
     @GetMapping("/prizes")
-    public ResponseEntity<List<LuckyDrawPrizeResponse>> getPrizesBySession(@RequestParam Long sessionId) {
-        return ResponseEntity.ok(luckyDrawService.getPrizesBySession(sessionId));
+    public ResponseEntity<Page<LuckyDrawPrizeResponse>> getPrizesBySession(@RequestParam Long sessionId, Pageable pageable) {
+        return ResponseEntity.ok(luckyDrawService.getPrizesBySession(sessionId, pageable));
     }
 
     @PostMapping("/winners")
@@ -57,7 +58,7 @@ public class LuckyDrawController {
     }
 
     @GetMapping("/winners")
-    public ResponseEntity<List<LuckyDrawWinnerResponse>> getWinnersByPrize(@RequestParam Long prizeId) {
-        return ResponseEntity.ok(luckyDrawService.getWinnersByPrize(prizeId));
+    public ResponseEntity<Page<LuckyDrawWinnerResponse>> getWinnersByPrize(@RequestParam Long prizeId, Pageable pageable) {
+        return ResponseEntity.ok(luckyDrawService.getWinnersByPrize(prizeId, pageable));
     }
 }

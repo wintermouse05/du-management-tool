@@ -19,11 +19,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class LateRecordService {
 
     private final LateRecordRepository lateRecordRepository;
@@ -48,15 +52,15 @@ public class LateRecordService {
         return toResponse(saved);
     }
 
-    public List<LateRecordResponse> getAll() {
-        return lateRecordRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<LateRecordResponse> getAll(Pageable pageable) {
+        return lateRecordRepository.findAll(pageable).map(this::toResponse);
     }
 
-    public List<LateRecordResponse> getByUser(Long userId) {
-        return lateRecordRepository.findByUserId(userId).stream().map(this::toResponse).toList();
+    public Page<LateRecordResponse> getByUser(Long userId, Pageable pageable) {
+        return lateRecordRepository.findByUserId(userId, pageable).map(this::toResponse);
     }
 
-    public List<LateSummaryResponse> getMonthlySummary(int year, int month) {
+    public Page<LateSummaryResponse> getMonthlySummary(int year, int month, Pageable pageable) {
         YearMonth yearMonth = YearMonth.of(year, month);
         LocalDate start = yearMonth.atDay(1);
         LocalDate end = yearMonth.atEndOfMonth();
@@ -64,7 +68,7 @@ public class LateRecordService {
         List<LateRecord> records = lateRecordRepository.findByRecordDateBetween(start, end);
         Map<User, List<LateRecord>> grouped = records.stream().collect(Collectors.groupingBy(LateRecord::getUser));
 
-        return grouped.entrySet().stream()
+        List<LateSummaryResponse> summaries = grouped.entrySet().stream()
                 .map(entry -> new LateSummaryResponse(
                         entry.getKey().getId(),
                         entry.getKey().getFullName(),
@@ -73,6 +77,13 @@ public class LateRecordService {
                 ))
                 .sorted(Comparator.comparingLong(LateSummaryResponse::totalLateTimes).reversed())
                 .toList();
+
+        int pageStart = (int) pageable.getOffset();
+        if (pageStart >= summaries.size()) {
+            return new PageImpl<>(List.of(), pageable, summaries.size());
+        }
+        int pageEnd = Math.min(pageStart + pageable.getPageSize(), summaries.size());
+        return new PageImpl<>(summaries.subList(pageStart, pageEnd), pageable, summaries.size());
     }
 
     private void applyLatePenalty(User user, PointRule rule, LateRecord lateRecord) {
