@@ -41,6 +41,9 @@ public class Seminar extends AuditableEntity {
     @Column(name = "scheduled_at")
     private LocalDateTime scheduledAt;
 
+    @Column(name = "materials_url", length = 500)
+    private String materialsUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private SeminarStatus status = SeminarStatus.PROPOSED;

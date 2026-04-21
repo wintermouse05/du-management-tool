@@ -17,6 +17,8 @@ import org.example.dumanagementbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ public class EventService {
     private final EventRepository eventRepository;
     private final EventAttendeeRepository eventAttendeeRepository;
     private final UserRepository userRepository;
+    private final GamificationService gamificationService;
 
     @Transactional
     public EventResponse create(EventRequest request) {
@@ -53,16 +56,12 @@ public class EventService {
 
     @Transactional
     public EventAttendeeResponse rsvp(Long eventId, EventAttendanceRequest request) {
-        if (request.userId() == null) {
-            throw new BadRequestException("userId is required");
-        }
         Event event = getEntityById(eventId);
-        User user = userRepository.findById(request.userId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
+        User user = getCurrentAuthenticatedUser();
 
         EventAttendeeId id = new EventAttendeeId();
         id.setEventId(eventId);
-        id.setUserId(request.userId());
+        id.setUserId(user.getId());
 
         EventAttendee attendee = eventAttendeeRepository.findById(id).orElseGet(EventAttendee::new);
         attendee.setId(id);
@@ -85,11 +84,16 @@ public class EventService {
         id.setUserId(userId);
 
         EventAttendee attendee = eventAttendeeRepository.findById(id).orElseGet(EventAttendee::new);
+        boolean alreadyCheckedIn = attendee.isCheckedIn();
         attendee.setId(id);
         attendee.setEvent(event);
         attendee.setUser(user);
         attendee.setRsvpStatus(attendee.getRsvpStatus() != null ? attendee.getRsvpStatus() : RsvpStatus.YES);
         attendee.setCheckedIn(true);
+
+        if (!alreadyCheckedIn) {
+            gamificationService.applyActionPoints(userId, "EVENT_ATTENDANCE", "Checked in to event: " + event.getName());
+        }
 
         return toAttendeeResponse(eventAttendeeRepository.save(attendee));
     }
@@ -121,5 +125,16 @@ public class EventService {
                 attendee.getRsvpStatus(),
                 attendee.isCheckedIn()
         );
+    }
+
+    private User getCurrentAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
+            throw new BadRequestException("Authenticated user was not found in security context");
+        }
+
+        return userRepository.findByUsername(authentication.getName())
+            .or(() -> userRepository.findByEmail(authentication.getName()))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found for username=" + authentication.getName()));
     }
 }

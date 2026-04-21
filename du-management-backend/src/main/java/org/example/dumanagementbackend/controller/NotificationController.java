@@ -3,12 +3,15 @@ package org.example.dumanagementbackend.controller;
 import java.util.List;
 import java.util.Map;
 
+import org.example.dumanagementbackend.dto.notification.NotificationChannelRequest;
+import org.example.dumanagementbackend.dto.notification.NotificationChannelResponse;
 import org.example.dumanagementbackend.dto.notification.NotificationInboxResponse;
 import org.example.dumanagementbackend.dto.notification.NotificationJobResponse;
 import org.example.dumanagementbackend.dto.notification.NotificationJobToggleRequest;
 import org.example.dumanagementbackend.dto.notification.NotificationTemplateRequest;
 import org.example.dumanagementbackend.dto.notification.NotificationTemplateResponse;
 import org.example.dumanagementbackend.dto.notification.NotificationUnreadCountResponse;
+import org.example.dumanagementbackend.service.NotificationChannelService;
 import org.example.dumanagementbackend.service.NotificationJobService;
 import org.example.dumanagementbackend.service.NotificationService;
 import org.example.dumanagementbackend.service.NotificationTemplateService;
@@ -38,6 +41,7 @@ public class NotificationController {
     private final NotificationService notificationService;
     private final NotificationJobService notificationJobService;
     private final NotificationTemplateService notificationTemplateService;
+    private final NotificationChannelService notificationChannelService;
 
     @GetMapping("/jobs")
     @PreAuthorize("hasRole('ADMIN')")
@@ -59,6 +63,34 @@ public class NotificationController {
     public ResponseEntity<Map<String, String>> triggerSurveyReminder(@RequestParam Long surveyId) {
         String result = notificationService.triggerSurveyReminder(surveyId);
         return ResponseEntity.ok(Map.of("message", result));
+    }
+
+    @GetMapping("/channels")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<NotificationChannelResponse>> getChannels() {
+        return ResponseEntity.ok(notificationChannelService.getChannels());
+    }
+
+    @PostMapping("/channels")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<NotificationChannelResponse> createChannel(@Valid @RequestBody NotificationChannelRequest request) {
+        return ResponseEntity.ok(notificationChannelService.createChannel(request));
+    }
+
+    @PutMapping("/channels/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<NotificationChannelResponse> updateChannel(
+            @PathVariable Long id,
+            @Valid @RequestBody NotificationChannelRequest request
+    ) {
+        return ResponseEntity.ok(notificationChannelService.updateChannel(id, request));
+    }
+
+    @DeleteMapping("/channels/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteChannel(@PathVariable Long id) {
+        notificationChannelService.deleteChannel(id);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/templates")

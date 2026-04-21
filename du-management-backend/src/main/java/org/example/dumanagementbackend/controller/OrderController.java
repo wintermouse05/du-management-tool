@@ -2,6 +2,7 @@ package org.example.dumanagementbackend.controller;
 
 import org.example.dumanagementbackend.dto.order.MenuItemRequest;
 import org.example.dumanagementbackend.dto.order.MenuItemResponse;
+import org.example.dumanagementbackend.dto.order.OrderSessionSummaryResponse;
 import org.example.dumanagementbackend.dto.order.OrderSessionRequest;
 import org.example.dumanagementbackend.dto.order.OrderSessionResponse;
 import org.example.dumanagementbackend.dto.order.UserOrderRequest;
@@ -15,9 +16,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -42,6 +46,19 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getMenuItems(pageable));
     }
 
+    @PutMapping("/menu-items/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<MenuItemResponse> updateMenuItem(@PathVariable Long id, @Valid @RequestBody MenuItemRequest request) {
+        return ResponseEntity.ok(orderService.updateMenuItem(id, request));
+    }
+
+    @DeleteMapping("/menu-items/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<Void> deleteMenuItem(@PathVariable Long id) {
+        orderService.deleteMenuItem(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/sessions")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<OrderSessionResponse> createSession(@Valid @RequestBody OrderSessionRequest request) {
@@ -51,6 +68,11 @@ public class OrderController {
     @GetMapping("/sessions")
     public ResponseEntity<Page<OrderSessionResponse>> getSessions(Pageable pageable) {
         return ResponseEntity.ok(orderService.getSessions(pageable));
+    }
+
+    @GetMapping("/sessions/{sessionId}/summary")
+    public ResponseEntity<OrderSessionSummaryResponse> getSessionSummary(@PathVariable Long sessionId) {
+        return ResponseEntity.ok(orderService.getSessionSummary(sessionId));
     }
 
     @PatchMapping("/sessions/status")

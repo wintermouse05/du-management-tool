@@ -8,6 +8,9 @@ import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -22,4 +25,39 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByStatusOrderByTotalPointsDesc(UserStatus status);
 
     Page<User> findByStatusOrderByTotalPointsDesc(UserStatus status, Pageable pageable);
+
+        @Query("""
+                        select u
+                            from User u
+                         where (:status is null or u.status = :status)
+                             and (
+                                        :q is null
+                                        or lower(u.username) like lower(concat('%', :q, '%'))
+                                        or lower(u.email) like lower(concat('%', :q, '%'))
+                                        or lower(u.fullName) like lower(concat('%', :q, '%'))
+                             )
+                        """)
+        Page<User> searchMembers(@Param("q") String q, @Param("status") UserStatus status, Pageable pageable);
+
+        @Query("""
+                        select u
+                            from User u
+                         where (:status is null or u.status = :status)
+                             and (
+                                        :q is null
+                                        or lower(u.username) like lower(concat('%', :q, '%'))
+                                        or lower(u.email) like lower(concat('%', :q, '%'))
+                                        or lower(u.fullName) like lower(concat('%', :q, '%'))
+                             )
+                         order by u.fullName asc
+                        """)
+        List<User> searchMembersForExport(@Param("q") String q, @Param("status") UserStatus status);
+
+        @Modifying(clearAutomatically = true, flushAutomatically = true)
+        @Query("""
+                        update User u
+                             set u.totalPoints = u.totalPoints + :delta
+                         where u.id = :userId
+                        """)
+        int incrementTotalPoints(@Param("userId") Long userId, @Param("delta") int delta);
 }

@@ -76,10 +76,8 @@ public class GamificationService {
         history.setPointsChanged(points);
         history.setReason(request.reason() != null ? request.reason() : "Manual point adjustment");
 
-        user.setTotalPoints(user.getTotalPoints() + points);
-        userRepository.save(user);
-
         PointHistoryResponse response = toHistoryResponse(pointHistoryRepository.save(history));
+        userRepository.incrementTotalPoints(user.getId(), points);
         
         // Broadcast leaderboard update
         messagingTemplate.convertAndSend("/topic/leaderboard", "UPDATE");
@@ -94,6 +92,27 @@ public class GamificationService {
     public Page<LeaderboardEntryResponse> leaderboard(Pageable pageable) {
         return userRepository.findByStatusOrderByTotalPointsDesc(UserStatus.ACTIVE, pageable)
                 .map(user -> new LeaderboardEntryResponse(user.getId(), user.getFullName(), user.getTotalPoints()));
+    }
+
+    @Transactional
+    public void applyActionPoints(Long userId, String actionCode, String reason) {
+        PointRule rule = pointRuleRepository.findByActionCode(actionCode).orElse(null);
+        if (rule == null) {
+            return;
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + userId));
+
+        PointHistory history = new PointHistory();
+        history.setUser(user);
+        history.setRule(rule);
+        history.setPointsChanged(rule.getPointValue());
+        history.setReason(reason != null && !reason.isBlank() ? reason : "Auto point adjustment: " + actionCode);
+        pointHistoryRepository.save(history);
+        userRepository.incrementTotalPoints(user.getId(), rule.getPointValue());
+
+        messagingTemplate.convertAndSend("/topic/leaderboard", "UPDATE");
     }
 
     private PointRuleResponse toRuleResponse(PointRule rule) {

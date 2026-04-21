@@ -4,6 +4,7 @@ public record LuckyDrawSessionResponse(
         Long id,
         Long eventId,
         String eventName,
-        String name
+        String name,
+        Integer participantCount
 ) {
 }

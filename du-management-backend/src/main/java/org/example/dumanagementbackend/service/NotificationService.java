@@ -3,6 +3,7 @@ package org.example.dumanagementbackend.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -13,17 +14,20 @@ import org.example.dumanagementbackend.dto.notification.NotificationRealtimeResp
 import org.example.dumanagementbackend.dto.notification.NotificationUnreadCountResponse;
 import org.example.dumanagementbackend.entity.Event;
 import org.example.dumanagementbackend.entity.EventAttendee;
+import org.example.dumanagementbackend.entity.NotificationChannel;
 import org.example.dumanagementbackend.entity.Notification;
 import org.example.dumanagementbackend.entity.Seminar;
 import org.example.dumanagementbackend.entity.Survey;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.UserSurvey;
+import org.example.dumanagementbackend.entity.enums.NotificationChannelType;
 import org.example.dumanagementbackend.entity.enums.NotificationType;
 import org.example.dumanagementbackend.entity.enums.RsvpStatus;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.EventAttendeeRepository;
 import org.example.dumanagementbackend.repository.EventRepository;
+import org.example.dumanagementbackend.repository.NotificationChannelRepository;
 import org.example.dumanagementbackend.repository.NotificationRepository;
 import org.example.dumanagementbackend.repository.SeminarRepository;
 import org.example.dumanagementbackend.repository.SurveyRepository;
@@ -36,6 +40,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import lombok.RequiredArgsConstructor;
 
@@ -56,6 +61,8 @@ public class NotificationService {
         private final UserSurveyRepository userSurveyRepository;
         private final NotificationTemplateService notificationTemplateService;
         private final NotificationEmailService notificationEmailService;
+        private final NotificationChannelRepository notificationChannelRepository;
+        private final WebClient webClient = WebClient.builder().build();
 
         public Page<NotificationInboxResponse> getMyNotifications(Pageable pageable) {
                 User currentUser = getCurrentUser();
@@ -300,8 +307,64 @@ public class NotificationService {
 
                 Notification saved = notificationRepository.save(notification);
                 sendRealtimeToUser(saved);
-                notificationEmailService.sendEmail(user.getEmail(), emailSubject, emailBody);
+                dispatchByConfiguredChannels(user, title, message, type, actionUrl, emailSubject, emailBody);
                 return 1;
+        }
+
+        private void dispatchByConfiguredChannels(
+                        User user,
+                        String title,
+                        String message,
+                        NotificationType type,
+                        String actionUrl,
+                        String emailSubject,
+                        String emailBody
+        ) {
+                List<NotificationChannel> channels = notificationChannelRepository.findByEnabledTrueOrderByTypeAscIdAsc();
+                if (channels.isEmpty()) {
+                        notificationEmailService.sendEmail(user.getEmail(), emailSubject, emailBody);
+                        return;
+                }
+
+                boolean emailConfigured = false;
+                for (NotificationChannel channel : channels) {
+                        if (channel.getType() == NotificationChannelType.EMAIL) {
+                                emailConfigured = true;
+                                notificationEmailService.sendEmail(user.getEmail(), emailSubject, emailBody);
+                        }
+                        if (channel.getType() == NotificationChannelType.WEBHOOK) {
+                                Map<String, Object> payload = new HashMap<>();
+                                payload.put("userId", user.getId());
+                                payload.put("username", user.getUsername());
+                                payload.put("email", user.getEmail());
+                                payload.put("title", title);
+                                payload.put("message", message);
+                                payload.put("type", type.name());
+                                payload.put("actionUrl", actionUrl);
+                                sendWebhook(channel.getEndpoint(), payload);
+                        }
+                }
+
+                if (!emailConfigured) {
+                        notificationEmailService.sendEmail(user.getEmail(), emailSubject, emailBody);
+                }
+        }
+
+        private void sendWebhook(String endpoint, Map<String, Object> payload) {
+                if (endpoint == null || endpoint.isBlank()) {
+                        return;
+                }
+
+                try {
+                        webClient.post()
+                                        .uri(endpoint)
+                                        .bodyValue(payload)
+                                        .retrieve()
+                                        .toBodilessEntity()
+                                        .block();
+                } catch (Exception ignored) {
+                        // Best-effort webhook dispatch.
+                }
         }
 
         private User getCurrentUser() {

@@ -2,8 +2,10 @@ package org.example.dumanagementbackend.service;
 
 import org.example.dumanagementbackend.dto.order.MenuItemRequest;
 import org.example.dumanagementbackend.dto.order.MenuItemResponse;
+import org.example.dumanagementbackend.dto.order.OrderItemSummaryResponse;
 import org.example.dumanagementbackend.dto.order.OrderSessionRequest;
 import org.example.dumanagementbackend.dto.order.OrderSessionResponse;
+import org.example.dumanagementbackend.dto.order.OrderSessionSummaryResponse;
 import org.example.dumanagementbackend.dto.order.UserOrderRequest;
 import org.example.dumanagementbackend.dto.order.UserOrderResponse;
 import org.example.dumanagementbackend.entity.MenuItem;
@@ -11,11 +13,17 @@ import org.example.dumanagementbackend.entity.OrderSession;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.UserOrder;
 import org.example.dumanagementbackend.entity.enums.OrderSessionStatus;
+import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.MenuItemRepository;
 import org.example.dumanagementbackend.repository.OrderSessionRepository;
 import org.example.dumanagementbackend.repository.UserOrderRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,6 +55,25 @@ public class OrderService {
     }
 
     @Transactional
+    public MenuItemResponse updateMenuItem(Long id, MenuItemRequest request) {
+        MenuItem item = menuItemRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Menu item not found with id=" + id));
+        item.setName(request.name());
+        item.setPrice(request.price());
+        return toMenuItemResponse(menuItemRepository.save(item));
+    }
+
+    @Transactional
+    public void deleteMenuItem(Long id) {
+        MenuItem item = menuItemRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Menu item not found with id=" + id));
+        if (userOrderRepository.existsByItemId(id)) {
+            throw new BadRequestException("Cannot delete menu item that already has orders");
+        }
+        menuItemRepository.delete(item);
+    }
+
+    @Transactional
     public OrderSessionResponse createSession(OrderSessionRequest request) {
         OrderSession session = new OrderSession();
         session.setStatus(request.status() != null ? request.status() : OrderSessionStatus.OPEN);
@@ -58,6 +85,46 @@ public class OrderService {
 
     public Page<OrderSessionResponse> getSessions(Pageable pageable) {
         return orderSessionRepository.findAll(pageable).map(this::toSessionResponse);
+    }
+
+    public OrderSessionSummaryResponse getSessionSummary(Long sessionId) {
+        orderSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order session not found with id=" + sessionId));
+
+        List<UserOrder> orders = userOrderRepository.findBySessionId(sessionId);
+        Map<Long, SummaryAccumulator> summaryByItem = new LinkedHashMap<>();
+        int totalQuantity = 0;
+        BigDecimal grandTotal = BigDecimal.ZERO;
+
+        for (UserOrder order : orders) {
+            BigDecimal lineTotal = order.getItem().getPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
+            totalQuantity += order.getQuantity();
+            grandTotal = grandTotal.add(lineTotal);
+
+            SummaryAccumulator acc = summaryByItem.computeIfAbsent(order.getItem().getId(), ignored ->
+                    new SummaryAccumulator(order.getItem().getId(), order.getItem().getName(), order.getItem().getPrice()));
+            acc.totalQuantity += order.getQuantity();
+            acc.totalAmount = acc.totalAmount.add(lineTotal);
+        }
+
+        List<OrderItemSummaryResponse> items = new ArrayList<>();
+        for (SummaryAccumulator acc : summaryByItem.values()) {
+            items.add(new OrderItemSummaryResponse(
+                    acc.itemId,
+                    acc.itemName,
+                    acc.unitPrice,
+                    acc.totalQuantity,
+                    acc.totalAmount
+            ));
+        }
+
+        return new OrderSessionSummaryResponse(
+                sessionId,
+                orders.size(),
+                totalQuantity,
+                grandTotal,
+                items
+        );
     }
 
     @Transactional
@@ -126,5 +193,19 @@ public class OrderService {
                 order.getNote(),
                 order.isPaid()
         );
+    }
+
+    private static class SummaryAccumulator {
+        private final Long itemId;
+        private final String itemName;
+        private final BigDecimal unitPrice;
+        private int totalQuantity;
+        private BigDecimal totalAmount = BigDecimal.ZERO;
+
+        private SummaryAccumulator(Long itemId, String itemName, BigDecimal unitPrice) {
+            this.itemId = itemId;
+            this.itemName = itemName;
+            this.unitPrice = unitPrice;
+        }
     }
 }

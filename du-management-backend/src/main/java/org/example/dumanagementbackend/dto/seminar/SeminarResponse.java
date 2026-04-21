@@ -10,6 +10,7 @@ public record SeminarResponse(
         String title,
         String description,
         LocalDateTime scheduledAt,
+        String materialsUrl,
         SeminarStatus status
 ) {
 }

@@ -5,10 +5,13 @@ import org.example.dumanagementbackend.dto.late.LateRecordResponse;
 import org.example.dumanagementbackend.dto.late.LateSummaryResponse;
 import org.example.dumanagementbackend.service.LateRecordService;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,5 +54,18 @@ public class LateRecordController {
             Pageable pageable
     ) {
         return ResponseEntity.ok(lateRecordService.getMonthlySummary(year, month, pageable));
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month
+    ) {
+        byte[] content = lateRecordService.exportCsv(year, month);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=late-records.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(content);
     }
 }

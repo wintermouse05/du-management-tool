@@ -12,6 +12,7 @@ public record MemberResponse(
         String fullName,
         LocalDate dob,
         LocalDate joinDate,
+        Long tenureMonths,
         Integer totalPoints,
         UserStatus status
 ) {

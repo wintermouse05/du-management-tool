@@ -1,8 +1,10 @@
 package org.example.dumanagementbackend.config;
 
+import org.example.dumanagementbackend.entity.PointRule;
 import org.example.dumanagementbackend.entity.Role;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
+import org.example.dumanagementbackend.repository.PointRuleRepository;
 import org.example.dumanagementbackend.repository.RoleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import java.time.LocalDate;
@@ -18,6 +20,7 @@ public class RbacDataInitializer implements CommandLineRunner {
 
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+    private final PointRuleRepository pointRuleRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${app.rbac.seed-default-users:true}")
@@ -45,6 +48,11 @@ public class RbacDataInitializer implements CommandLineRunner {
         createUserIfMissing("admin", "admin@du.local", "System Admin", adminPassword, adminRole);
         createUserIfMissing("hr", "hr@du.local", "HR User", hrPassword, hrRole);
         createUserIfMissing("member", "member@du.local", "Default Member", memberPassword, memberRole);
+
+        createPointRuleIfMissing("LATE_PENALTY", -5);
+        createPointRuleIfMissing("EVENT_ATTENDANCE", 10);
+        createPointRuleIfMissing("SEMINAR_COMPLETION", 15);
+        createPointRuleIfMissing("LUCKY_DRAW_WIN", 20);
     }
 
     private Role getOrCreateRole(String name, String description) {
@@ -71,5 +79,15 @@ public class RbacDataInitializer implements CommandLineRunner {
         user.setTotalPoints(0);
         user.setStatus(UserStatus.ACTIVE);
         userRepository.save(user);
+    }
+
+    private void createPointRuleIfMissing(String actionCode, int pointValue) {
+        if (pointRuleRepository.findByActionCode(actionCode).isPresent()) {
+            return;
+        }
+        PointRule rule = new PointRule();
+        rule.setActionCode(actionCode);
+        rule.setPointValue(pointValue);
+        pointRuleRepository.save(rule);
     }
 }

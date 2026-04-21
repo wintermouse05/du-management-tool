@@ -13,4 +13,6 @@ public interface UserOrderRepository extends JpaRepository<UserOrder, Long> {
     Page<UserOrder> findBySessionId(Long sessionId, Pageable pageable);
 
     List<UserOrder> findByUserId(Long userId);
+
+    boolean existsByItemId(Long itemId);
 }

@@ -12,6 +12,7 @@ import org.example.dumanagementbackend.repository.LateRecordRepository;
 import org.example.dumanagementbackend.repository.PointHistoryRepository;
 import org.example.dumanagementbackend.repository.PointRuleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Comparator;
@@ -86,6 +87,34 @@ public class LateRecordService {
         return new PageImpl<>(summaries.subList(pageStart, pageEnd), pageable, summaries.size());
     }
 
+    public byte[] exportCsv(Integer year, Integer month) {
+        List<LateRecord> records;
+        if (year != null && month != null) {
+            YearMonth yearMonth = YearMonth.of(year, month);
+            records = lateRecordRepository.findByRecordDateBetween(yearMonth.atDay(1), yearMonth.atEndOfMonth());
+        } else {
+            records = lateRecordRepository.findAll();
+        }
+
+        List<LateRecord> sorted = records.stream()
+                .sorted(Comparator.comparing(LateRecord::getRecordDate).reversed())
+                .toList();
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("id,userId,fullName,recordDate,minutesLate,reason\n");
+        for (LateRecord record : sorted) {
+            csv.append(record.getId()).append(',')
+                    .append(record.getUser().getId()).append(',')
+                    .append(csvEscape(record.getUser().getFullName())).append(',')
+                    .append(record.getRecordDate()).append(',')
+                    .append(record.getMinutesLate()).append(',')
+                    .append(csvEscape(record.getReason()))
+                    .append('\n');
+        }
+
+        return csv.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
     private void applyLatePenalty(User user, PointRule rule, LateRecord lateRecord) {
         PointHistory history = new PointHistory();
         history.setUser(user);
@@ -93,9 +122,7 @@ public class LateRecordService {
         history.setPointsChanged(rule.getPointValue());
         history.setReason("Late penalty - " + lateRecord.getRecordDate() + " (" + lateRecord.getMinutesLate() + " mins)");
         pointHistoryRepository.save(history);
-
-        user.setTotalPoints(user.getTotalPoints() + rule.getPointValue());
-        userRepository.save(user);
+        userRepository.incrementTotalPoints(user.getId(), rule.getPointValue());
     }
 
     private LateRecordResponse toResponse(LateRecord record) {
@@ -107,5 +134,15 @@ public class LateRecordService {
                 record.getMinutesLate(),
                 record.getReason()
         );
+    }
+
+    private String csvEscape(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
 }
