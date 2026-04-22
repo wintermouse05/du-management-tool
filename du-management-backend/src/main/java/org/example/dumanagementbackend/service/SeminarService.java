@@ -126,6 +126,11 @@ public class SeminarService {
             throw new BadRequestException("userId and voteType are required");
         }
         Seminar seminar = getEntityById(seminarId);
+        
+        if (seminar.getStatus() != SeminarStatus.PROPOSED) {
+            throw new BadRequestException("Cannot vote on a seminar that is already " + seminar.getStatus().name());
+        }
+        
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
 

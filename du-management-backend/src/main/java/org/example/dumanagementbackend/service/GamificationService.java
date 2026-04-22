@@ -15,6 +15,8 @@ import org.example.dumanagementbackend.repository.PointHistoryRepository;
 import org.example.dumanagementbackend.repository.PointRuleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ public class GamificationService {
     private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
+    @CacheEvict(cacheNames = "pointRuleByActionCode", allEntries = true)
     public PointRuleResponse createRule(PointRuleRequest request) {
         PointRule rule = new PointRule();
         rule.setActionCode(request.actionCode());
@@ -44,6 +47,7 @@ public class GamificationService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "pointRuleByActionCode", allEntries = true)
     public PointRuleResponse updateRule(Long id, PointRuleRequest request) {
         PointRule rule = pointRuleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Point rule not found with id=" + id));
@@ -53,6 +57,7 @@ public class GamificationService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "gamificationLeaderboard", allEntries = true)
     public PointHistoryResponse adjustManual(ManualPointRequest request) {
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
@@ -89,12 +94,17 @@ public class GamificationService {
         return pointHistoryRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable).map(this::toHistoryResponse);
     }
 
+    @Cacheable(
+            cacheNames = "gamificationLeaderboard",
+            key = "{#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString()}"
+    )
     public Page<LeaderboardEntryResponse> leaderboard(Pageable pageable) {
         return userRepository.findByStatusOrderByTotalPointsDesc(UserStatus.ACTIVE, pageable)
                 .map(user -> new LeaderboardEntryResponse(user.getId(), user.getFullName(), user.getTotalPoints()));
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "gamificationLeaderboard", allEntries = true)
     public void applyActionPoints(Long userId, String actionCode, String reason) {
         PointRule rule = pointRuleRepository.findByActionCode(actionCode).orElse(null);
         if (rule == null) {

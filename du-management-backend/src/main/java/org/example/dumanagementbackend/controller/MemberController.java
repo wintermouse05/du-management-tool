@@ -28,12 +28,13 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/members")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','HR')")
+@PreAuthorize("hasAnyRole('ADMIN','HR','MEMBER')")
 public class MemberController {
 
     private final MemberService memberService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<MemberResponse> create(@Valid @RequestBody MemberRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(memberService.create(request));
     }
@@ -53,6 +54,7 @@ public class MemberController {
     }
 
     @GetMapping("/export")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<byte[]> export(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) UserStatus status
@@ -65,6 +67,7 @@ public class MemberController {
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<Map<String, Object>> importMembers(@RequestParam("file") MultipartFile file) {
         int imported = memberService.importMembers(file);
         return ResponseEntity.ok(Map.of(
@@ -79,11 +82,13 @@ public class MemberController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<MemberResponse> update(@PathVariable Long id, @Valid @RequestBody MemberRequest request) {
         return ResponseEntity.ok(memberService.update(id, request));
     }
 
     @PutMapping("/{id}/deactivate")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<MemberResponse> deactivate(@PathVariable Long id) {
         return ResponseEntity.ok(memberService.deactivate(id));
     }

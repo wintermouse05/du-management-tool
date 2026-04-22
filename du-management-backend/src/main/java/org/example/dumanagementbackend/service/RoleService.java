@@ -6,6 +6,8 @@ import org.example.dumanagementbackend.entity.Role;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ public class RoleService {
 
     private final RoleRepository roleRepository;
 
+    @CacheEvict(cacheNames = {"rolesPage", "roleById"}, allEntries = true)
     public RoleResponse create(RoleRequest request) {
         Role role = new Role();
         role.setName(request.name());
@@ -25,14 +28,20 @@ public class RoleService {
         return toResponse(roleRepository.save(role));
     }
 
+    @Cacheable(
+            cacheNames = "rolesPage",
+            key = "{#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString()}"
+    )
     public Page<RoleResponse> getAll(Pageable pageable) {
         return roleRepository.findAll(pageable).map(this::toResponse);
     }
 
+    @Cacheable(cacheNames = "roleById", key = "#id")
     public RoleResponse getById(Long id) {
         return toResponse(getEntityById(id));
     }
 
+    @CacheEvict(cacheNames = {"rolesPage", "roleById"}, allEntries = true)
     public RoleResponse update(Long id, RoleRequest request) {
         Role role = getEntityById(id);
         role.setName(request.name());
@@ -40,6 +49,7 @@ public class RoleService {
         return toResponse(roleRepository.save(role));
     }
 
+    @CacheEvict(cacheNames = {"rolesPage", "roleById"}, allEntries = true)
     public void delete(Long id) {
         roleRepository.delete(getEntityById(id));
     }

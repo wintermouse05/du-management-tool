@@ -3,14 +3,17 @@ package org.example.dumanagementbackend.service;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
 import org.example.dumanagementbackend.dto.notification.NotificationTemplateRequest;
 import org.example.dumanagementbackend.dto.notification.NotificationTemplateResponse;
 import org.example.dumanagementbackend.entity.NotificationTemplate;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.NotificationTemplateRepository;
-import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +35,7 @@ public class NotificationTemplateService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "notificationTemplateByCode", allEntries = true)
     public NotificationTemplateResponse createTemplate(NotificationTemplateRequest request) {
         NotificationTemplate template = new NotificationTemplate();
         apply(template, request);
@@ -39,6 +43,7 @@ public class NotificationTemplateService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "notificationTemplateByCode", allEntries = true)
     public NotificationTemplateResponse updateTemplate(String code, NotificationTemplateRequest request) {
         NotificationTemplate template = notificationTemplateRepository.findByCode(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Notification template not found with code=" + code));
@@ -47,6 +52,7 @@ public class NotificationTemplateService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "notificationTemplateByCode", allEntries = true)
     public void deleteTemplate(String code) {
         NotificationTemplate template = notificationTemplateRepository.findByCode(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Notification template not found with code=" + code));

@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +39,7 @@ public class LateRecordService {
     private final PointHistoryRepository pointHistoryRepository;
 
     @Transactional
+    @CacheEvict(cacheNames = "lateMonthlySummary", allEntries = true)
     public LateRecordResponse create(LateRecordRequest request) {
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
@@ -61,6 +64,10 @@ public class LateRecordService {
         return lateRecordRepository.findByUserId(userId, pageable).map(this::toResponse);
     }
 
+    @Cacheable(
+            cacheNames = "lateMonthlySummary",
+            key = "{#year,#month,#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString()}"
+    )
     public Page<LateSummaryResponse> getMonthlySummary(int year, int month, Pageable pageable) {
         YearMonth yearMonth = YearMonth.of(year, month);
         LocalDate start = yearMonth.atDay(1);

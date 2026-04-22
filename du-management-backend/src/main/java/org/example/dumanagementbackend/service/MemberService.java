@@ -1,14 +1,5 @@
 package org.example.dumanagementbackend.service;
 
-import org.example.dumanagementbackend.dto.member.MemberRequest;
-import org.example.dumanagementbackend.dto.member.MemberResponse;
-import org.example.dumanagementbackend.entity.Role;
-import org.example.dumanagementbackend.entity.User;
-import org.example.dumanagementbackend.entity.enums.UserStatus;
-import org.example.dumanagementbackend.exception.BadRequestException;
-import org.example.dumanagementbackend.exception.ResourceNotFoundException;
-import org.example.dumanagementbackend.repository.RoleRepository;
-import org.example.dumanagementbackend.repository.UserRepository;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -20,18 +11,29 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
+
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.example.dumanagementbackend.dto.member.MemberRequest;
+import org.example.dumanagementbackend.dto.member.MemberResponse;
+import org.example.dumanagementbackend.entity.Role;
+import org.example.dumanagementbackend.entity.User;
+import org.example.dumanagementbackend.entity.enums.UserStatus;
+import org.example.dumanagementbackend.exception.BadRequestException;
+import org.example.dumanagementbackend.exception.ResourceNotFoundException;
+import org.example.dumanagementbackend.repository.RoleRepository;
+import org.example.dumanagementbackend.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -57,13 +59,13 @@ public class MemberService {
     }
 
     public Page<MemberResponse> search(String q, UserStatus status, Pageable pageable) {
-        String query = normalizeQuery(q);
-        return userRepository.searchMembers(query, status, pageable).map(this::toResponse);
+        String likePattern = normalizeLikePattern(q);
+        return userRepository.searchMembers(likePattern, status, pageable).map(this::toResponse);
     }
 
     public byte[] exportCsv(String q, UserStatus status) {
-        String query = normalizeQuery(q);
-        List<User> users = userRepository.searchMembersForExport(query, status);
+        String likePattern = normalizeLikePattern(q);
+        List<User> users = userRepository.searchMembersForExport(likePattern, status);
 
         StringBuilder csv = new StringBuilder();
         csv.append("id,username,email,fullName,role,status,joinDate,tenureMonths,totalPoints\n");
@@ -191,12 +193,21 @@ public class MemberService {
         );
     }
 
-    private String normalizeQuery(String q) {
+    private String normalizeLikePattern(String q) {
         if (q == null) {
-            return null;
+            return "%";
         }
-        String trimmed = q.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+
+        String trimmed = q.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.isEmpty()) {
+            return "%";
+        }
+
+        String escaped = trimmed
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + escaped + "%";
     }
 
     private Long calculateTenureMonths(LocalDate joinDate) {

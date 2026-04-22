@@ -1,27 +1,56 @@
 package org.example.dumanagementbackend.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
 import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+
 @Service
 public class JwtService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(JwtService.class);
 
     @Value("${app.jwt.secret}")
     private String jwtSecret;
 
     @Value("${app.jwt.expiration-ms}")
     private long jwtExpirationMs;
+
+    private Key signingKey;
+
+    @PostConstruct
+    void initializeSigningKey() {
+        String configuredSecret = jwtSecret == null ? "" : jwtSecret.trim();
+        if (configuredSecret.isEmpty()) {
+            signingKey = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+            LOGGER.warn("app.jwt.secret is empty. Generated a temporary in-memory HS256 key. Set APP_JWT_SECRET in production.");
+            return;
+        }
+
+        try {
+            byte[] keyBytes = Decoders.BASE64.decode(configuredSecret);
+            signingKey = Keys.hmacShaKeyFor(keyBytes);
+        } catch (RuntimeException ex) {
+            throw new IllegalStateException(
+                    "Invalid app.jwt.secret. Provide a Base64 key with at least 256 bits for HS256.",
+                    ex
+            );
+        }
+    }
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -74,7 +103,6 @@ public class JwtService {
     }
 
     private Key getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
-        return Keys.hmacShaKeyFor(keyBytes);
+        return signingKey;
     }
 }

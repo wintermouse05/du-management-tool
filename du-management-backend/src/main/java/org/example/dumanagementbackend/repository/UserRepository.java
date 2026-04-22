@@ -30,12 +30,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
                         select u
                             from User u
                          where (:status is null or u.status = :status)
-                             and (
-                                        :q is null
-                                        or lower(u.username) like lower(concat('%', :q, '%'))
-                                        or lower(u.email) like lower(concat('%', :q, '%'))
-                                        or lower(u.fullName) like lower(concat('%', :q, '%'))
-                             )
+                           and (
+                                        lower(u.username) like :q escape '\\'
+                                        or lower(u.email) like :q escape '\\'
+                                        or lower(u.fullName) like :q escape '\\'
+                           )
                         """)
         Page<User> searchMembers(@Param("q") String q, @Param("status") UserStatus status, Pageable pageable);
 
@@ -43,12 +42,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
                         select u
                             from User u
                          where (:status is null or u.status = :status)
-                             and (
-                                        :q is null
-                                        or lower(u.username) like lower(concat('%', :q, '%'))
-                                        or lower(u.email) like lower(concat('%', :q, '%'))
-                                        or lower(u.fullName) like lower(concat('%', :q, '%'))
-                             )
+                           and (
+                                        lower(u.username) like :q escape '\\'
+                                        or lower(u.email) like :q escape '\\'
+                                        or lower(u.fullName) like :q escape '\\'
+                           )
                          order by u.fullName asc
                         """)
         List<User> searchMembersForExport(@Param("q") String q, @Param("status") UserStatus status);

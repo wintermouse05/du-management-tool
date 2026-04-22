@@ -25,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -87,6 +89,7 @@ public class OrderService {
         return orderSessionRepository.findAll(pageable).map(this::toSessionResponse);
     }
 
+    @Cacheable(cacheNames = "orderSessionSummary", key = "#sessionId")
     public OrderSessionSummaryResponse getSessionSummary(Long sessionId) {
         orderSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order session not found with id=" + sessionId));
@@ -138,9 +141,15 @@ public class OrderService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "orderSessionSummary", key = "#request.sessionId")
     public UserOrderResponse placeOrder(UserOrderRequest request) {
         OrderSession session = orderSessionRepository.findById(request.sessionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order session not found with id=" + request.sessionId()));
+                
+        if (session.getStatus() != OrderSessionStatus.OPEN) {
+            throw new BadRequestException("Cannot place order because this session is not open.");
+        }
+        
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
         MenuItem item = menuItemRepository.findById(request.itemId())
@@ -164,6 +173,7 @@ public class OrderService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "orderSessionSummary", key = "#result.sessionId", condition = "#result != null")
     public UserOrderResponse markPaid(Long orderId, boolean paid) {
         UserOrder order = userOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id=" + orderId));

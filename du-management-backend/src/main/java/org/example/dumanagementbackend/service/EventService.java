@@ -57,6 +57,11 @@ public class EventService {
     @Transactional
     public EventAttendeeResponse rsvp(Long eventId, EventAttendanceRequest request) {
         Event event = getEntityById(eventId);
+        
+        if (event.getEventDate() != null && java.time.LocalDateTime.now().isAfter(event.getEventDate())) {
+            throw new BadRequestException("Cannot RSVP to an event that has already occurred.");
+        }
+        
         User user = getCurrentAuthenticatedUser();
 
         EventAttendeeId id = new EventAttendeeId();

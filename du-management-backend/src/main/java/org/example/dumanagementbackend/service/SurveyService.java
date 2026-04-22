@@ -8,6 +8,7 @@ import org.example.dumanagementbackend.entity.Survey;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.UserSurvey;
 import org.example.dumanagementbackend.entity.UserSurveyId;
+import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.SurveyRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
@@ -15,6 +16,8 @@ import org.example.dumanagementbackend.repository.UserSurveyRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -54,6 +57,7 @@ public class SurveyService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "surveyProgress", key = "#surveyId", beforeInvocation = true)
     public SurveyProgressResponse assignToUser(Long surveyId, Long userId) {
         Survey survey = getEntityById(surveyId);
         User user = userRepository.findById(userId)
@@ -75,8 +79,14 @@ public class SurveyService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "surveyProgress", key = "#surveyId", beforeInvocation = true)
     public SurveyProgressResponse markCompletion(Long surveyId, SurveyCompletionRequest request) {
         Survey survey = getEntityById(surveyId);
+        
+        if (survey.getDeadline() != null && LocalDateTime.now().isAfter(survey.getDeadline())) {
+            throw new BadRequestException("Cannot complete survey because the deadline has passed.");
+        }
+        
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
 
@@ -100,6 +110,7 @@ public class SurveyService {
         return progress;
     }
 
+    @Cacheable(cacheNames = "surveyProgress", key = "#surveyId")
     public SurveyProgressResponse getProgress(Long surveyId) {
         getEntityById(surveyId);
         List<UserSurvey> assignments = userSurveyRepository.findBySurveyId(surveyId);

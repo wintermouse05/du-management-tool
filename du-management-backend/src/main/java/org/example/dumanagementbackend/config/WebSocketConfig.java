@@ -52,7 +52,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
                 
-                if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
+                if (accessor != null && (StompCommand.CONNECT.equals(accessor.getCommand()) || StompCommand.STOMP.equals(accessor.getCommand()))) {
                     String authHeader = accessor.getFirstNativeHeader("Authorization");
                     if (authHeader != null && authHeader.startsWith("Bearer ")) {
                         String token = authHeader.substring(7);
@@ -64,6 +64,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                                             userDetails, null, userDetails.getAuthorities());
                                     accessor.setUser(authentication);
+                                    return org.springframework.messaging.support.MessageBuilder.createMessage(message.getPayload(), accessor.getMessageHeaders());
                                 }
                             }
                         } catch (Exception e) {
