@@ -197,6 +197,11 @@ small,
 }
 
 /* Inputs */
+.p-inputnumber-input {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
 .p-inputtext,
 .p-select,
 .p-datepicker,
