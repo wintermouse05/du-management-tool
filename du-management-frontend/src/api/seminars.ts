@@ -29,6 +29,12 @@ export const seminarsApi = {
     })
   },
 
+  downloadMaterials(id: number) {
+    return http.get<Blob>(`/seminars/${id}/materials`, {
+      responseType: 'blob',
+    })
+  },
+
   vote(seminarId: number, data: SeminarVoteRequest) {
     return http.post<SeminarVoteResponse>(`/seminars/${seminarId}/vote`, data)
   },

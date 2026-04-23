@@ -2,8 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { seminarsApi } from '@/api/seminars'
+import { membersApi } from '@/api/members'
 import type { SeminarResponse, SeminarRequest, SeminarVoteResponse } from '@/types'
-import { SeminarStatus, VoteType } from '@/types'
+import { SeminarStatus, VoteType, UserStatus } from '@/types'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -22,6 +23,7 @@ const total = ref(0); const loading = ref(false); const pg = ref(0); const rows 
 const dialogVisible = ref(false); const editing = ref(false); const editId = ref<number|null>(null)
 const form = ref<SeminarRequest>({ title: '', description: '', status: SeminarStatus.PROPOSED })
 const formDate = ref<Date|null>(null)
+const speakerOptions = ref<Array<{ label: string; value: number }>>([])
 const votesDialog = ref(false); const votes = ref<SeminarVoteResponse[]>([]); const voteSeminarId = ref(0)
 const materialInput = ref<HTMLInputElement | null>(null)
 const materialSeminarId = ref<number | null>(null)
@@ -32,8 +34,38 @@ async function load() {
   finally { loading.value = false }
 }
 function onPage(e: any) { pg.value = e.page; rows.value = e.rows; load() }
-function openCreate() { editing.value = false; editId.value = null; form.value = { title: '', description: '', status: SeminarStatus.PROPOSED }; formDate.value = null; dialogVisible.value = true }
-function openEdit(s: SeminarResponse) { editing.value = true; editId.value = s.id; form.value = { speakerId: s.speakerId, title: s.title, description: s.description || '', scheduledAt: s.scheduledAt, status: s.status }; formDate.value = s.scheduledAt ? new Date(s.scheduledAt) : null; dialogVisible.value = true }
+function openCreate() {
+  editing.value = false
+  editId.value = null
+  form.value = { speakerId: null, title: '', description: '', status: SeminarStatus.PROPOSED }
+  formDate.value = null
+  dialogVisible.value = true
+}
+
+function openEdit(s: SeminarResponse) {
+  editing.value = true
+  editId.value = s.id
+  form.value = { speakerId: s.speakerId, title: s.title, description: s.description || '', scheduledAt: s.scheduledAt, status: s.status }
+  formDate.value = s.scheduledAt ? new Date(s.scheduledAt) : null
+
+  if (s.speakerId && !speakerOptions.value.some(option => option.value === s.speakerId)) {
+    speakerOptions.value.unshift({ label: s.speakerName || `User #${s.speakerId}`, value: s.speakerId })
+  }
+
+  dialogVisible.value = true
+}
+
+async function loadSpeakers() {
+  try {
+    const res = await membersApi.search({ page: 0, size: 200, status: UserStatus.ACTIVE })
+    speakerOptions.value = res.data.content.map(member => ({
+      label: `${member.fullName} (${member.username})`,
+      value: member.id,
+    }))
+  } catch {
+    speakerOptions.value = []
+  }
+}
 
 async function save() {
   if (formDate.value) form.value.scheduledAt = formDate.value.toISOString()
@@ -83,11 +115,49 @@ async function handleMaterialSelected(event: Event) {
   }
 }
 
+function extractFilename(contentDisposition?: string): string | null {
+  if (!contentDisposition) {
+    return null
+  }
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].replace(/"/g, '').trim())
+    } catch {
+      return utf8Match[1].replace(/"/g, '').trim()
+    }
+  }
+
+  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+  return plainMatch?.[1]?.trim() || null
+}
+
+async function downloadMaterials(seminar: SeminarResponse) {
+  try {
+    const res = await seminarsApi.downloadMaterials(seminar.id)
+    const disposition = res.headers['content-disposition'] as string | undefined
+    const filename = extractFilename(disposition) || `seminar-${seminar.id}-materials`
+
+    const blobUrl = URL.createObjectURL(res.data)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(blobUrl)
+  } catch (err: any) {
+    toast.add({ severity: 'error', summary: 'Download failed', detail: err.response?.data?.message || 'Unable to download materials', life: 3000 })
+  }
+}
+
 function statusSeverity(s: SeminarStatus) { return s === SeminarStatus.DONE ? 'success' : s === SeminarStatus.SCHEDULED ? 'info' : s === SeminarStatus.APPROVED ? 'warn' : 'secondary' }
 function fmtDate(d: string|null) { return d ? new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—' }
 const statusOpts = Object.values(SeminarStatus).map(v => ({ label: v, value: v }))
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadSpeakers()
+})
 </script>
 
 <template>
@@ -109,7 +179,13 @@ onMounted(load)
         <Column field="scheduledAt" header="Schedule"><template #body="{data}">{{ fmtDate(data.scheduledAt) }}</template></Column>
         <Column field="materialsUrl" header="Materials">
           <template #body="{ data }">
-            <a v-if="data.materialsUrl" :href="data.materialsUrl" target="_blank" rel="noopener noreferrer" style="color:var(--theme-blue);">Download</a>
+            <Button
+              v-if="data.materialsUrl"
+              label="Download"
+              icon="pi pi-download"
+              text
+              @click="downloadMaterials(data)"
+            />
             <span v-else>—</span>
           </template>
         </Column>
@@ -129,6 +205,18 @@ onMounted(load)
     </div>
     <Dialog v-model:visible="dialogVisible" :header="editing ? 'Edit Seminar' : 'Propose Seminar'" modal :style="{width:'520px'}">
       <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+        <div class="form-field">
+          <label>Speaker</label>
+          <Select
+            v-model="form.speakerId"
+            :options="speakerOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Select speaker"
+            showClear
+            fluid
+          />
+        </div>
         <div class="form-field"><label>Title</label><InputText v-model="form.title" fluid /></div>
         <div class="form-field"><label>Description</label><Textarea v-model="form.description" rows="3" fluid /></div>
         <div class="form-field"><label>Scheduled At</label><DatePicker v-model="formDate" showTime hourFormat="24" fluid /></div>
