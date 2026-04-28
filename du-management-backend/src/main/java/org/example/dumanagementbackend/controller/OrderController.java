@@ -2,12 +2,15 @@ package org.example.dumanagementbackend.controller;
 
 import org.example.dumanagementbackend.dto.order.MenuItemRequest;
 import org.example.dumanagementbackend.dto.order.MenuItemResponse;
+import org.example.dumanagementbackend.dto.order.MenuScrapeItemResponse;
+import org.example.dumanagementbackend.dto.order.MenuScrapeRequest;
 import org.example.dumanagementbackend.dto.order.OrderSessionSummaryResponse;
 import org.example.dumanagementbackend.dto.order.OrderSessionRequest;
 import org.example.dumanagementbackend.dto.order.OrderSessionResponse;
 import org.example.dumanagementbackend.dto.order.UserOrderRequest;
 import org.example.dumanagementbackend.dto.order.UserOrderResponse;
 import org.example.dumanagementbackend.entity.enums.OrderSessionStatus;
+import org.example.dumanagementbackend.service.MenuScraperService;
 import org.example.dumanagementbackend.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,14 +21,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -34,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
     private final OrderService orderService;
+    private final MenuScraperService menuScraperService;
 
     @PostMapping("/menu-items")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
@@ -98,5 +104,10 @@ public class OrderController {
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<UserOrderResponse> markPaid(@RequestParam Long orderId, @RequestParam boolean paid) {
         return ResponseEntity.ok(orderService.markPaid(orderId, paid));
+    }
+
+    @PostMapping("/scrape-menu")
+    public ResponseEntity<List<MenuScrapeItemResponse>> scrapeMenu(@Valid @RequestBody MenuScrapeRequest request) {
+        return ResponseEntity.ok(menuScraperService.scrape(request.url()));
     }
 }
