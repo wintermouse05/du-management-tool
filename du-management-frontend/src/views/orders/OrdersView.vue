@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { ordersApi } from '@/api/orders'
-import type { MenuItemResponse, OrderSessionResponse, OrderSessionSummaryResponse, UserOrderResponse } from '@/types'
+import type { MenuItemResponse, MenuScrapeItemResponse, OrderSessionResponse, OrderSessionSummaryResponse, UserOrderResponse } from '@/types'
 import { OrderSessionStatus } from '@/types'
 import { wsService } from '@/services/websocket'
 import DataTable from 'primevue/datatable'
@@ -66,6 +66,25 @@ async function deleteMenuItem(id: number) {
   } catch (e: any) {
     toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 })
   }
+}
+
+// Menu Scrape
+const scrapeUrl = ref('')
+const scraping = ref(false)
+const scrapedItems = ref<MenuScrapeItemResponse[]>([])
+async function scrapeMenu() {
+  if (!scrapeUrl.value.trim()) {
+    toast.add({ severity:'warn', summary:'Please enter a URL', life:2000 })
+    return
+  }
+  scraping.value = true; scrapedItems.value = []
+  try {
+    const r = await ordersApi.scrapeMenu({ url: scrapeUrl.value.trim() })
+    scrapedItems.value = r.data
+    toast.add({ severity:'success', summary:`Found ${r.data.length} item(s)`, life:2000 })
+  } catch (e: any) {
+    toast.add({ severity:'error', summary:'Scrape failed', detail: e.response?.data?.message || e.message, life:5000 })
+  } finally { scraping.value = false }
 }
 
 // Sessions
@@ -163,6 +182,24 @@ onUnmounted(() => {
                 </template>
               </Column>
             </DataTable>
+
+            <!-- Scrape Menu from URL -->
+            <div style="margin-top:var(--space-8); padding-top:var(--space-6); border-top: 1px solid var(--theme-divider);">
+              <h3 style="margin-bottom:var(--space-2);">Scrape Menu from URL</h3>
+              <p style="color:var(--theme-text-weak);font-size:13px;margin-bottom:var(--space-4);">Paste a GrabFood or ShopeeFood link to parse its menu items.</p>
+              <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
+                <InputText v-model="scrapeUrl" placeholder="https://food.grab.com/vn/vi/restaurant/..." style="flex:1;min-width:280px;" />
+                <Button label="Parse Menu" icon="pi pi-search" :loading="scraping" @click="scrapeMenu" />
+              </div>
+              <div v-if="scrapedItems.length > 0" style="margin-top:var(--space-5);">
+                <h4 style="margin-bottom:var(--space-3);">Scraped Items ({{ scrapedItems.length }})</h4>
+                <DataTable :value="scrapedItems" stripedRows>
+                  <Column field="name" header="Name" />
+                  <Column field="price" header="Price" />
+                  <Column field="description" header="Description" />
+                </DataTable>
+              </div>
+            </div>
           </TabPanel>
           <TabPanel value="1">
             <div style="display:flex;justify-content:flex-end;margin-bottom:var(--space-4);"><Button v-if="auth.isAdminOrHR" label="New Session" icon="pi pi-plus" size="small" @click="sessDialog=true" /></div>

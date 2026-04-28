@@ -233,6 +233,16 @@ export interface OrderSessionSummaryResponse {
   items: OrderItemSummaryResponse[]
 }
 
+export interface MenuScrapeRequest {
+  url: string
+}
+
+export interface MenuScrapeItemResponse {
+  name: string
+  price: string
+  description: string
+}
+
 // ============================================================
 // Survey DTOs
 // ============================================================

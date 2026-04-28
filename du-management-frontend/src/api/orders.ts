@@ -1,6 +1,7 @@
 import http from './http'
 import type {
   MenuItemRequest, MenuItemResponse,
+  MenuScrapeRequest, MenuScrapeItemResponse,
   OrderSessionRequest, OrderSessionResponse,
   UserOrderRequest, UserOrderResponse,
   OrderSessionSummaryResponse,
@@ -60,5 +61,9 @@ export const ordersApi = {
     return http.patch<UserOrderResponse>('/orders/user-orders/paid', null, {
       params: { orderId, paid },
     })
+  },
+
+  scrapeMenu(data: MenuScrapeRequest) {
+    return http.post<MenuScrapeItemResponse[]>('/orders/scrape-menu', data)
   },
 }
