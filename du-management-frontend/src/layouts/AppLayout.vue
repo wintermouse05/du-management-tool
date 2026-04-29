@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import { wsService } from '@/services/websocket'
 import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
@@ -10,6 +11,7 @@ import NotificationBell from '@/components/NotificationBell.vue'
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const theme = useThemeStore()
 const toast = useToast()
 const sidebarOpen = ref(false)
 
@@ -96,7 +98,12 @@ const roleColor = computed(() => {
         <div class="logo-icon-sm"><i class="pi pi-th-large"></i></div>
         <span>DU Manager</span>
       </div>
-      <Button icon="pi pi-sign-out" text rounded severity="secondary" @click="handleLogout" />
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="theme-toggle-btn" @click="theme.toggle()" :title="theme.isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+          <i :class="theme.isDark ? 'pi pi-sun' : 'pi pi-moon'"></i>
+        </button>
+        <Button icon="pi pi-sign-out" text rounded severity="secondary" @click="handleLogout" />
+      </div>
     </header>
 
     <!-- Sidebar -->
@@ -130,8 +137,13 @@ const roleColor = computed(() => {
             <span class="user-role" :style="{ color: roleColor }">{{ auth.role }}</span>
           </div>
         </div>
-        <Button icon="pi pi-sign-out" severity="secondary" text rounded aria-label="Logout"
-          @click="handleLogout" class="logout-btn" />
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <button class="theme-toggle-btn" @click="theme.toggle()" :title="theme.isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+            <i :class="theme.isDark ? 'pi pi-sun' : 'pi pi-moon'"></i>
+          </button>
+          <Button icon="pi pi-sign-out" severity="secondary" text rounded aria-label="Logout"
+            @click="handleLogout" class="logout-btn" />
+        </div>
       </div>
     </aside>
 
@@ -150,6 +162,7 @@ const roleColor = computed(() => {
 .app-layout {
   display: flex;
   min-height: 100vh;
+  transition: background var(--transition-normal), color var(--transition-normal);
 }
 
 /* ── Mobile Top Bar ───────────────────────────────── */

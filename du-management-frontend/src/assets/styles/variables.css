@@ -83,3 +83,51 @@
   --transition-normal: 250ms ease;
   --transition-slow: 350ms ease;
 }
+
+/* ============================================================
+   Dark Mode Token Overrides
+   ============================================================ */
+[data-theme="dark"] {
+  /* ── Primary Colors ─────────────────────────────── */
+  --theme-blue: #4d8ef0;
+  --theme-blue-hover: #6ea8f5;
+  --theme-blue-light: rgba(77, 142, 240, 0.12);
+  --theme-blue-surface: rgba(77, 142, 240, 0.06);
+  --theme-text-primary: #e8eaf0;
+  --theme-surface: #1e2230;
+  --theme-surface-light: #151824;
+  --theme-spotlight: rgba(20, 24, 36, 0.97);
+
+  /* ── Semantic Colors ────────────────────────────── */
+  --theme-success: #4ade80;
+  --theme-success-bg: rgba(74, 222, 128, 0.10);
+  --theme-warning: #fbbf24;
+  --theme-warning-bg: rgba(251, 191, 36, 0.10);
+  --theme-danger: #f87171;
+  --theme-danger-bg: rgba(248, 113, 113, 0.10);
+  --theme-info: #60a5fa;
+  --theme-info-bg: rgba(96, 165, 250, 0.08);
+
+  /* ── Text Colors ────────────────────────────────── */
+  --theme-text-weak: rgba(200, 210, 230, 0.55);
+  --theme-text-secondary: rgba(216, 224, 240, 0.82);
+  --theme-text-inverse: #151824;
+  --theme-text-link: #7eb8f7;
+
+  /* ── Neutral / Borders ──────────────────────────── */
+  --theme-border: #2e3550;
+  --theme-border-hover: #3d4a6a;
+  --theme-dark-gray: #c8cdd8;
+  --theme-bg-hover: rgba(255, 255, 255, 0.05);
+  --theme-bg-active: rgba(255, 255, 255, 0.09);
+  --theme-divider: #252a3e;
+
+  /* ── Shadows ────────────────────────────────────── */
+  --theme-shadow-card: rgba(0, 0, 0, 0.6) 0px 0px 1px,
+    rgba(0, 0, 0, 0.3) 0px 0px 2px,
+    rgba(77, 142, 240, 0.18) 0px 1px 3px,
+    rgba(0, 0, 0, 0.12) 0px 0px 0px 0.5px inset;
+  --theme-shadow-soft: rgba(0, 0, 0, 0.25) 0px 0px 20px;
+  --theme-shadow-elevated: rgba(0, 0, 0, 0.4) 0px 4px 12px,
+    rgba(77, 142, 240, 0.12) 0px 2px 8px;
+}
