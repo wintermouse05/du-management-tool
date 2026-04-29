@@ -34,6 +34,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+
 @ExtendWith(MockitoExtension.class)
 class GamificationServiceTest {
 
@@ -45,6 +47,9 @@ class GamificationServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private SimpMessagingTemplate messagingTemplate;
 
     @InjectMocks
     private GamificationService gamificationService;
@@ -66,7 +71,6 @@ class GamificationServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(pointRuleRepository.findById(ruleId)).thenReturn(Optional.of(rule));
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pointHistoryRepository.save(any(PointHistory.class))).thenAnswer(invocation -> {
             PointHistory history = invocation.getArgument(0);
             history.setId(99L);
@@ -78,13 +82,14 @@ class GamificationServiceTest {
 
         PointHistoryResponse response = gamificationService.adjustManual(request);
 
-        assertEquals(115, user.getTotalPoints());
+        // Service calls userRepository.incrementTotalPoints (DB-level), not user.setTotalPoints.
+        // Verify incremented at DB level instead of checking in-memory object.
+        verify(userRepository).incrementTotalPoints(userId, 15);
         assertEquals(99L, response.id());
         assertEquals(userId, response.userId());
         assertEquals(ruleId, response.ruleId());
         assertEquals(15, response.pointsChanged());
         assertEquals("Manual point adjustment", response.reason());
-        verify(userRepository).save(user);
         verify(pointHistoryRepository).save(any(PointHistory.class));
     }
 
@@ -155,7 +160,6 @@ class GamificationServiceTest {
         user.setTotalPoints(10);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(pointHistoryRepository.save(any(PointHistory.class))).thenAnswer(invocation -> {
             PointHistory history = invocation.getArgument(0);
             history.setId(100L);
@@ -167,7 +171,8 @@ class GamificationServiceTest {
                 new ManualPointRequest(userId, null, -5, "manual penalty")
         );
 
-        assertEquals(5, user.getTotalPoints());
+        // Service calls userRepository.incrementTotalPoints (DB-level), not user.setTotalPoints.
+        verify(userRepository).incrementTotalPoints(userId, -5);
         assertNull(response.ruleId());
         assertNull(response.actionCode());
         assertEquals(-5, response.pointsChanged());
