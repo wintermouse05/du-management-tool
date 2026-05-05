@@ -28,6 +28,8 @@ public class MenuScraperService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public List<MenuScrapeItemResponse> scrape(String url) {
+        boolean isShopeeFood = url.contains("shopeefood.vn");
+
         String renderedHtml;
         try (Playwright playwright = Playwright.create()) {
             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
@@ -36,7 +38,7 @@ public class MenuScraperService {
                     .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"));
             Page page = context.newPage();
 
-            LOGGER.info("Scraping URL: {}", url);
+            LOGGER.info("Scraping URL: {} (type: {})", url, isShopeeFood ? "ShopeeFood" : "GrabFood");
             page.navigate(url, new Page.NavigateOptions().setWaitUntil(WaitUntilState.NETWORKIDLE));
             renderedHtml = page.content();
             browser.close();
@@ -44,10 +46,41 @@ public class MenuScraperService {
             throw new BadRequestException("Failed to load URL: " + e.getMessage());
         }
 
-        return parseMenuFromHtml(renderedHtml);
+        if (isShopeeFood) {
+            return parseShopeeFoodMenu(renderedHtml);
+        }
+        return parseGrabFoodMenu(renderedHtml);
     }
 
-    private List<MenuScrapeItemResponse> parseMenuFromHtml(String html) {
+    // ==================== ShopeeFood Parser (HTML-based) ====================
+
+    private List<MenuScrapeItemResponse> parseShopeeFoodMenu(String html) {
+        Document doc = Jsoup.parse(html);
+        List<MenuScrapeItemResponse> items = new ArrayList<>();
+
+        Elements itemElements = doc.select(".menu-restaurant-detail .item-restaurant-row");
+
+        for (Element row : itemElements) {
+            String name = row.select(".item-restaurant-name").text();
+            String price = row.select(".current-price").text().replaceAll("[^0-9]", "");
+            String description = row.select(".item-restaurant-desc").text();
+
+            if (!name.isEmpty()) {
+                items.add(new MenuScrapeItemResponse(name, price, description));
+            }
+        }
+
+        if (items.isEmpty()) {
+            throw new BadRequestException("No menu items could be extracted from ShopeeFood. The page structure may have changed.");
+        }
+
+        LOGGER.info("Extracted {} items from ShopeeFood", items.size());
+        return items;
+    }
+
+    // ==================== GrabFood Parser (JSON-LD based) ====================
+
+    private List<MenuScrapeItemResponse> parseGrabFoodMenu(String html) {
         Document doc = Jsoup.parse(html);
         Elements scripts = doc.select("script");
         String jsonString = null;
@@ -60,7 +93,7 @@ public class MenuScraperService {
         }
 
         if (jsonString == null) {
-            throw new BadRequestException("No menu data found on the page. The URL may not be a supported GrabFood/ShopeeFood page.");
+            throw new BadRequestException("No menu data found on the page. The URL may not be a supported GrabFood page.");
         }
 
         String trimmedJson = jsonString.trim();
@@ -117,14 +150,15 @@ public class MenuScraperService {
             }
 
             if (items.isEmpty()) {
-                throw new BadRequestException("No menu items could be extracted. The page structure may have changed.");
+                throw new BadRequestException("No menu items could be extracted from GrabFood. The page structure may have changed.");
             }
         } catch (BadRequestException e) {
             throw e;
         } catch (Exception e) {
-            throw new BadRequestException("Failed to parse menu data: " + e.getMessage());
+            throw new BadRequestException("Failed to parse GrabFood menu data: " + e.getMessage());
         }
 
+        LOGGER.info("Extracted {} items from GrabFood", items.size());
         return items;
     }
 }
