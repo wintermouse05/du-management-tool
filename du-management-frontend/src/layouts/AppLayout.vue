@@ -82,6 +82,18 @@ const roleColor = computed(() => {
     default: return '#1b61c9'
   }
 })
+
+const themeModeIcon = computed(() => {
+  if (theme.mode === 'light') return 'pi pi-sun'
+  if (theme.mode === 'dark') return 'pi pi-moon'
+  return 'pi pi-desktop'
+})
+
+const themeModeTitle = computed(() => {
+  if (theme.mode === 'light') return 'Switch to Dark Mode'
+  if (theme.mode === 'dark') return 'Switch to Auto Mode'
+  return 'Switch to Light Mode'
+})
 </script>
 
 <template>
@@ -99,8 +111,8 @@ const roleColor = computed(() => {
         <span>DU Manager</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <button class="theme-toggle-btn" @click="theme.toggle()" :title="theme.isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
-          <i :class="theme.isDark ? 'pi pi-sun' : 'pi pi-moon'"></i>
+        <button class="theme-toggle-btn" @click="theme.toggle()" :title="themeModeTitle">
+          <i :class="themeModeIcon"></i>
         </button>
         <Button icon="pi pi-sign-out" text rounded severity="secondary" @click="handleLogout" />
       </div>
@@ -138,8 +150,8 @@ const roleColor = computed(() => {
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-          <button class="theme-toggle-btn" @click="theme.toggle()" :title="theme.isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
-            <i :class="theme.isDark ? 'pi pi-sun' : 'pi pi-moon'"></i>
+          <button class="theme-toggle-btn" @click="theme.toggle()" :title="themeModeTitle">
+            <i :class="themeModeIcon"></i>
           </button>
           <Button icon="pi pi-sign-out" severity="secondary" text rounded aria-label="Logout"
             @click="handleLogout" class="logout-btn" />

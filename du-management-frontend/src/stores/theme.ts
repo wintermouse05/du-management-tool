@@ -1,24 +1,38 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
+
+export type ThemeMode = 'light' | 'dark' | 'auto'
 
 export const useThemeStore = defineStore('theme', () => {
-  const isDark = ref(localStorage.getItem('theme') === 'dark')
+  const mode = ref<ThemeMode>((localStorage.getItem('theme-mode') as ThemeMode) || 'auto')
 
-  function applyTheme(dark: boolean) {
-    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+  // When mode is 'auto', set data-theme="auto" and let CSS @media handle it.
+  // When mode is 'light' or 'dark', set data-theme explicitly.
+  function applyMode(m: ThemeMode) {
+    document.documentElement.setAttribute('data-theme', m)
   }
 
-  // Apply on init
-  applyTheme(isDark.value)
+  // isDark is used for the icon display only — for 'auto' we check the media query
+  const isDark = computed(() => {
+    if (mode.value === 'auto') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches
+    }
+    return mode.value === 'dark'
+  })
 
-  watch(isDark, (dark) => {
-    localStorage.setItem('theme', dark ? 'dark' : 'light')
-    applyTheme(dark)
+  // Apply on init
+  applyMode(mode.value)
+
+  watch(mode, (newMode) => {
+    localStorage.setItem('theme-mode', newMode)
+    applyMode(newMode)
   })
 
   function toggle() {
-    isDark.value = !isDark.value
+    if (mode.value === 'light') mode.value = 'dark'
+    else if (mode.value === 'dark') mode.value = 'auto'
+    else mode.value = 'light'
   }
 
-  return { isDark, toggle }
+  return { mode, isDark, toggle }
 })

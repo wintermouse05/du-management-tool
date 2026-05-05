@@ -742,6 +742,180 @@ small,
   background: var(--theme-border-hover);
 }
 
+/* ============================================================
+   Auto Mode — PrimeVue Component Overrides (follows OS theme)
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] body {
+    color: var(--theme-text-primary);
+    background: var(--theme-surface-light);
+  }
+
+  [data-theme="auto"] .p-datatable .p-datatable-thead > tr > th {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text-weak) !important;
+    border-color: var(--theme-border) !important;
+  }
+
+  [data-theme="auto"] .p-datatable .p-datatable-tbody > tr {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] .p-datatable .p-datatable-tbody > tr > td {
+    border-color: var(--theme-divider) !important;
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] .p-datatable .p-datatable-tbody > tr:hover {
+    background: var(--theme-bg-hover) !important;
+  }
+
+  [data-theme="auto"] .p-datatable .p-paginator {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text-secondary) !important;
+    border-color: var(--theme-border) !important;
+  }
+
+  [data-theme="auto"] .p-paginator .p-paginator-page,
+  [data-theme="auto"] .p-paginator .p-paginator-first,
+  [data-theme="auto"] .p-paginator .p-paginator-prev,
+  [data-theme="auto"] .p-paginator .p-paginator-next,
+  [data-theme="auto"] .p-paginator .p-paginator-last {
+    color: var(--theme-text-secondary) !important;
+    background: transparent !important;
+  }
+
+  [data-theme="auto"] .p-paginator .p-paginator-page.p-highlight {
+    background: var(--theme-blue-light) !important;
+    color: var(--theme-blue) !important;
+  }
+
+  [data-theme="auto"] .p-card {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] .p-card .p-card-title,
+  [data-theme="auto"] .p-card .p-card-subtitle,
+  [data-theme="auto"] .p-card .p-card-content {
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] .p-dialog {
+    background: var(--theme-surface) !important;
+    border: 1px solid var(--theme-border) !important;
+  }
+
+  [data-theme="auto"] .p-dialog .p-dialog-header {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text-primary) !important;
+    border-color: var(--theme-divider) !important;
+  }
+
+  [data-theme="auto"] .p-dialog .p-dialog-content {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] .p-dialog .p-dialog-footer {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-divider) !important;
+  }
+
+  [data-theme="auto"] .p-dialog-mask {
+    background: rgba(0, 0, 0, 0.65) !important;
+  }
+
+  [data-theme="auto"] .p-inputtext,
+  [data-theme="auto"] .p-select,
+  [data-theme="auto"] .p-datepicker,
+  [data-theme="auto"] .p-textarea {
+    background: var(--theme-surface-light) !important;
+    border-color: var(--theme-border) !important;
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] .p-inputtext::placeholder,
+  [data-theme="auto"] .p-textarea::placeholder {
+    color: var(--theme-text-weak) !important;
+  }
+
+  [data-theme="auto"] .p-inputtext:focus,
+  [data-theme="auto"] .p-select:focus,
+  [data-theme="auto"] .p-textarea:focus {
+    border-color: var(--theme-blue) !important;
+    box-shadow: 0 0 0 2px rgba(77, 142, 240, 0.20) !important;
+  }
+
+  [data-theme="auto"] .p-select-overlay,
+  [data-theme="auto"] .p-datepicker-panel,
+  [data-theme="auto"] .p-autocomplete-overlay {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] .p-select-option:hover,
+  [data-theme="auto"] .p-autocomplete-option:hover {
+    background: var(--theme-bg-hover) !important;
+  }
+
+  [data-theme="auto"] .p-select-option.p-select-option-selected,
+  [data-theme="auto"] .p-select-option.p-highlight {
+    background: var(--theme-blue-light) !important;
+    color: var(--theme-blue) !important;
+  }
+
+  [data-theme="auto"] .p-menu {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+  }
+
+  [data-theme="auto"] .p-menu .p-menuitem-link {
+    color: var(--theme-text-secondary) !important;
+  }
+
+  [data-theme="auto"] .p-menu .p-menuitem-link:hover {
+    background: var(--theme-bg-hover) !important;
+  }
+
+  [data-theme="auto"] .p-toast .p-toast-message {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] .p-tablist {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+  }
+
+  [data-theme="auto"] .p-tablist .p-tab {
+    color: var(--theme-text-secondary) !important;
+    background: transparent !important;
+  }
+
+  [data-theme="auto"] .p-tablist .p-tab.p-tab-active {
+    color: var(--theme-blue) !important;
+  }
+
+  [data-theme="auto"] .p-tabpanels,
+  [data-theme="auto"] .p-tabpanel {
+    background: transparent !important;
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] ::-webkit-scrollbar-thumb {
+    background: var(--theme-border);
+  }
+
+  [data-theme="auto"] ::-webkit-scrollbar-thumb:hover {
+    background: var(--theme-border-hover);
+  }
+}
+
 /* Dark mode toggle button */
 .theme-toggle-btn {
   display: flex;

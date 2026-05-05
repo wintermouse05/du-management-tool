@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useMenuScrapeStore } from '@/stores/menuScrape'
 import { ordersApi } from '@/api/orders'
 import type { MenuItemResponse, MenuScrapeItemResponse, OrderSessionResponse, OrderSessionSummaryResponse, UserOrderResponse } from '@/types'
 import { OrderSessionStatus } from '@/types'
@@ -22,6 +23,7 @@ import TabPanel from 'primevue/tabpanel'
 import { useToast } from 'primevue/usetoast'
 
 const auth = useAuthStore()
+const menuScrapeStore = useMenuScrapeStore()
 const toast = useToast()
 const activeTab = ref('0')
 
@@ -68,23 +70,31 @@ async function deleteMenuItem(id: number) {
   }
 }
 
-// Menu Scrape
-const scrapeUrl = ref('')
+// Menu Scrape (data persisted in Pinia store across route changes)
 const scraping = ref(false)
-const scrapedItems = ref<MenuScrapeItemResponse[]>([])
 async function scrapeMenu() {
-  if (!scrapeUrl.value.trim()) {
+  if (!menuScrapeStore.scrapeUrl.trim()) {
     toast.add({ severity:'warn', summary:'Please enter a URL', life:2000 })
     return
   }
-  scraping.value = true; scrapedItems.value = []
+  scraping.value = true
   try {
-    const r = await ordersApi.scrapeMenu({ url: scrapeUrl.value.trim() })
-    scrapedItems.value = r.data
+    const r = await ordersApi.scrapeMenu({ url: menuScrapeStore.scrapeUrl.trim() })
+    menuScrapeStore.setResults(menuScrapeStore.scrapeUrl.trim(), r.data)
     toast.add({ severity:'success', summary:`Found ${r.data.length} item(s)`, life:2000 })
   } catch (e: any) {
     toast.add({ severity:'error', summary:'Scrape failed', detail: e.response?.data?.message || e.message, life:5000 })
   } finally { scraping.value = false }
+}
+async function addScrapedToMenu(item: MenuScrapeItemResponse) {
+  try {
+    const price = parseInt(item.price.replace(/[^0-9]/g, ''), 10) || 0
+    await ordersApi.createMenuItem({ name: item.name, price })
+    toast.add({ severity:'success', summary:'Added to menu', detail: item.name, life:2000 })
+    loadMenu()
+  } catch (e: any) {
+    toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message || e.message, life:3000 })
+  }
 }
 
 // Sessions
@@ -188,15 +198,20 @@ onUnmounted(() => {
               <h3 style="margin-bottom:var(--space-2);">Scrape Menu from URL</h3>
               <p style="color:var(--theme-text-weak);font-size:13px;margin-bottom:var(--space-4);">Paste a GrabFood or ShopeeFood link to parse its menu items.</p>
               <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
-                <InputText v-model="scrapeUrl" placeholder="https://food.grab.com/vn/vi/restaurant/..." style="flex:1;min-width:280px;" />
+                <InputText v-model="menuScrapeStore.scrapeUrl" placeholder="https://food.grab.com/vn/vi/restaurant/..." style="flex:1;min-width:280px;" />
                 <Button label="Parse Menu" icon="pi pi-search" :loading="scraping" @click="scrapeMenu" />
               </div>
-              <div v-if="scrapedItems.length > 0" style="margin-top:var(--space-5);">
-                <h4 style="margin-bottom:var(--space-3);">Scraped Items ({{ scrapedItems.length }})</h4>
-                <DataTable :value="scrapedItems" stripedRows>
+              <div v-if="menuScrapeStore.scrapedItems.length > 0" style="margin-top:var(--space-5);">
+                <h4 style="margin-bottom:var(--space-3);">Scraped Items ({{ menuScrapeStore.scrapedItems.length }})</h4>
+                <DataTable :value="menuScrapeStore.scrapedItems" stripedRows>
                   <Column field="name" header="Name" />
                   <Column field="price" header="Price" />
                   <Column field="description" header="Description" />
+                  <Column v-if="auth.isAdminOrHR" header="" style="width:80px;text-align:center;">
+                    <template #body="{ data }">
+                      <Button icon="pi pi-plus" size="small" rounded text severity="success" v-tooltip.top="'Add to Menu'" @click="addScrapedToMenu(data)" />
+                    </template>
+                  </Column>
                 </DataTable>
               </div>
             </div>
