@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import { membersApi } from '@/api/members'
 import { rolesApi } from '@/api/roles'
 import type { MemberResponse, MemberRequest, RoleResponse } from '@/types'
@@ -14,6 +15,7 @@ import DatePicker from 'primevue/datepicker'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 
+const auth = useAuthStore()
 const toast = useToast()
 const members = ref<MemberResponse[]>([])
 const roles = ref<RoleResponse[]>([])
@@ -133,7 +135,7 @@ onMounted(() => { loadMembers(); loadRoles() })
   <div class="page-container">
     <div class="page-header">
       <div><h2>Members</h2><p class="page-subtitle">Manage DU members and their roles</p></div>
-      <div style="display:flex;gap:8px;">
+      <div v-if="auth.isAdminOrHR" style="display:flex;gap:8px;">
         <Button label="Import" icon="pi pi-upload" severity="secondary" outlined @click="triggerImportPicker" />
         <Button label="Export" icon="pi pi-download" severity="secondary" outlined @click="exportCsv" />
         <Button label="Add Member" icon="pi pi-plus" @click="openCreate" />
@@ -180,7 +182,7 @@ onMounted(() => { loadMembers(); loadRoles() })
         <Column field="status" header="Status">
           <template #body="{ data }"><Tag :value="data.status" :severity="statusSeverity(data.status)" /></template>
         </Column>
-        <Column header="Actions" style="width: 160px">
+        <Column v-if="auth.isAdminOrHR" header="Actions" style="width: 160px">
           <template #body="{ data }">
             <div class="flex-end">
               <Button icon="pi pi-pencil" text rounded severity="info" @click="openEdit(data)" />

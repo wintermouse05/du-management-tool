@@ -44,7 +44,7 @@ interface NavItem {
 const navItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
     { label: 'Dashboard', icon: 'pi pi-home', to: '/' },
-    { label: 'Members', icon: 'pi pi-users', to: '/members', roles: ['ADMIN', 'HR'] },
+    { label: 'Members', icon: 'pi pi-users', to: '/members' },
     { label: 'Events', icon: 'pi pi-calendar', to: '/events' },
     { label: 'Seminars', icon: 'pi pi-microphone', to: '/seminars' },
     { label: 'Orders', icon: 'pi pi-shopping-cart', to: '/orders' },

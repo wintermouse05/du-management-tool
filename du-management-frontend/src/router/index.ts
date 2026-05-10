@@ -32,7 +32,6 @@ const routes: RouteRecordRaw[] = [
         path: 'members',
         name: 'Members',
         component: () => import('@/views/members/MembersView.vue'),
-        meta: { roles: ['ADMIN', 'HR'] },
       },
       {
         path: 'events',
