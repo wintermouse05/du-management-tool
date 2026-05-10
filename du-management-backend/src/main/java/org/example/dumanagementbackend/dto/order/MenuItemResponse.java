@@ -5,6 +5,8 @@ import java.math.BigDecimal;
 public record MenuItemResponse(
         Long id,
         String name,
-        BigDecimal price
+        BigDecimal price,
+        String description,
+        Long restaurantId
 ) {
 }

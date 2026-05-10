@@ -1,12 +1,13 @@
 package org.example.dumanagementbackend.controller;
 
-import org.example.dumanagementbackend.dto.order.MenuItemRequest;
 import org.example.dumanagementbackend.dto.order.MenuItemResponse;
 import org.example.dumanagementbackend.dto.order.MenuScrapeItemResponse;
 import org.example.dumanagementbackend.dto.order.MenuScrapeRequest;
 import org.example.dumanagementbackend.dto.order.OrderSessionSummaryResponse;
 import org.example.dumanagementbackend.dto.order.OrderSessionRequest;
 import org.example.dumanagementbackend.dto.order.OrderSessionResponse;
+import org.example.dumanagementbackend.dto.order.RestaurantRequest;
+import org.example.dumanagementbackend.dto.order.RestaurantResponse;
 import org.example.dumanagementbackend.dto.order.UserOrderRequest;
 import org.example.dumanagementbackend.dto.order.UserOrderResponse;
 import org.example.dumanagementbackend.entity.enums.OrderSessionStatus;
@@ -24,7 +25,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -41,29 +41,39 @@ public class OrderController {
     private final OrderService orderService;
     private final MenuScraperService menuScraperService;
 
-    @PostMapping("/menu-items")
+    // ==================== Restaurants ====================
+
+    @PostMapping("/restaurants")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<MenuItemResponse> createMenuItem(@Valid @RequestBody MenuItemRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(orderService.createMenuItem(request));
+    public ResponseEntity<RestaurantResponse> saveRestaurant(@Valid @RequestBody RestaurantRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(orderService.saveRestaurant(request));
     }
 
-    @GetMapping("/menu-items")
-    public ResponseEntity<Page<MenuItemResponse>> getMenuItems(Pageable pageable) {
-        return ResponseEntity.ok(orderService.getMenuItems(pageable));
+    @GetMapping("/restaurants")
+    public ResponseEntity<List<RestaurantResponse>> getRestaurants() {
+        return ResponseEntity.ok(orderService.getRestaurants());
     }
 
-    @PutMapping("/menu-items/{id}")
+    @DeleteMapping("/restaurants/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<MenuItemResponse> updateMenuItem(@PathVariable Long id, @Valid @RequestBody MenuItemRequest request) {
-        return ResponseEntity.ok(orderService.updateMenuItem(id, request));
-    }
-
-    @DeleteMapping("/menu-items/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<Void> deleteMenuItem(@PathVariable Long id) {
-        orderService.deleteMenuItem(id);
+    public ResponseEntity<Void> deleteRestaurant(@PathVariable Long id) {
+        orderService.deleteRestaurant(id);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/restaurants/{id}/menu")
+    public ResponseEntity<List<MenuItemResponse>> getRestaurantMenu(@PathVariable Long id) {
+        return ResponseEntity.ok(orderService.getMenuByRestaurant(id));
+    }
+
+    // ==================== Scrape (preview only) ====================
+
+    @PostMapping("/scrape-menu")
+    public ResponseEntity<List<MenuScrapeItemResponse>> scrapeMenu(@Valid @RequestBody MenuScrapeRequest request) {
+        return ResponseEntity.ok(menuScraperService.scrape(request.url()));
+    }
+
+    // ==================== Sessions ====================
 
     @PostMapping("/sessions")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
@@ -90,6 +100,8 @@ public class OrderController {
         return ResponseEntity.ok(orderService.updateSessionStatus(sessionId, status));
     }
 
+    // ==================== User Orders ====================
+
     @PostMapping("/user-orders")
     public ResponseEntity<UserOrderResponse> placeOrder(@Valid @RequestBody UserOrderRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(orderService.placeOrder(request));
@@ -104,10 +116,5 @@ public class OrderController {
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<UserOrderResponse> markPaid(@RequestParam Long orderId, @RequestParam boolean paid) {
         return ResponseEntity.ok(orderService.markPaid(orderId, paid));
-    }
-
-    @PostMapping("/scrape-menu")
-    public ResponseEntity<List<MenuScrapeItemResponse>> scrapeMenu(@Valid @RequestBody MenuScrapeRequest request) {
-        return ResponseEntity.ok(menuScraperService.scrape(request.url()));
     }
 }

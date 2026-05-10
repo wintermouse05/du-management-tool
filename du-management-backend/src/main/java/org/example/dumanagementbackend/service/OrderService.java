@@ -1,15 +1,18 @@
 package org.example.dumanagementbackend.service;
 
-import org.example.dumanagementbackend.dto.order.MenuItemRequest;
 import org.example.dumanagementbackend.dto.order.MenuItemResponse;
+import org.example.dumanagementbackend.dto.order.MenuScrapeItemResponse;
 import org.example.dumanagementbackend.dto.order.OrderItemSummaryResponse;
 import org.example.dumanagementbackend.dto.order.OrderSessionRequest;
 import org.example.dumanagementbackend.dto.order.OrderSessionResponse;
 import org.example.dumanagementbackend.dto.order.OrderSessionSummaryResponse;
+import org.example.dumanagementbackend.dto.order.RestaurantRequest;
+import org.example.dumanagementbackend.dto.order.RestaurantResponse;
 import org.example.dumanagementbackend.dto.order.UserOrderRequest;
 import org.example.dumanagementbackend.dto.order.UserOrderResponse;
 import org.example.dumanagementbackend.entity.MenuItem;
 import org.example.dumanagementbackend.entity.OrderSession;
+import org.example.dumanagementbackend.entity.Restaurant;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.UserOrder;
 import org.example.dumanagementbackend.entity.enums.OrderSessionStatus;
@@ -17,13 +20,18 @@ import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.MenuItemRepository;
 import org.example.dumanagementbackend.repository.OrderSessionRepository;
+import org.example.dumanagementbackend.repository.RestaurantRepository;
 import org.example.dumanagementbackend.repository.UserOrderRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -42,38 +50,116 @@ public class OrderService {
     private final OrderSessionRepository orderSessionRepository;
     private final UserOrderRepository userOrderRepository;
     private final UserRepository userRepository;
+    private final RestaurantRepository restaurantRepository;
+    private final MenuScraperService menuScraperService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    @Transactional
-    public MenuItemResponse createMenuItem(MenuItemRequest request) {
-        MenuItem item = new MenuItem();
-        item.setName(request.name());
-        item.setPrice(request.price());
-        return toMenuItemResponse(menuItemRepository.save(item));
-    }
-
-    public Page<MenuItemResponse> getMenuItems(Pageable pageable) {
-        return menuItemRepository.findAll(pageable).map(this::toMenuItemResponse);
-    }
+    // ==================== Restaurant ====================
 
     @Transactional
-    public MenuItemResponse updateMenuItem(Long id, MenuItemRequest request) {
-        MenuItem item = menuItemRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Menu item not found with id=" + id));
-        item.setName(request.name());
-        item.setPrice(request.price());
-        return toMenuItemResponse(menuItemRepository.save(item));
-    }
+    public RestaurantResponse saveRestaurant(RestaurantRequest request) {
+        Restaurant restaurant = new Restaurant();
+        restaurant.setName(request.name());
+        restaurant.setScrapeUrl(request.scrapeUrl());
+        restaurant = restaurantRepository.save(restaurant);
 
-    @Transactional
-    public void deleteMenuItem(Long id) {
-        MenuItem item = menuItemRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Menu item not found with id=" + id));
-        if (userOrderRepository.existsByItemId(id)) {
-            throw new BadRequestException("Cannot delete menu item that already has orders");
+        // Scrape and persist initial menu items
+        List<MenuScrapeItemResponse> scraped = menuScraperService.scrape(request.scrapeUrl());
+        for (MenuScrapeItemResponse item : scraped) {
+            MenuItem menuItem = new MenuItem();
+            menuItem.setRestaurant(restaurant);
+            menuItem.setName(item.name());
+            menuItem.setPrice(parsePrice(item.price()));
+            menuItem.setDescription(item.description());
+            menuItemRepository.save(menuItem);
         }
-        menuItemRepository.delete(item);
+
+        return toRestaurantResponse(restaurant);
     }
+
+    public List<RestaurantResponse> getRestaurants() {
+        return restaurantRepository.findAll().stream()
+                .map(this::toRestaurantResponse)
+                .toList();
+    }
+
+    @Transactional
+    public void deleteRestaurant(Long id) {
+        Restaurant restaurant = restaurantRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found with id=" + id));
+
+        List<MenuItem> items = menuItemRepository.findByRestaurantId(id);
+        for (MenuItem item : items) {
+            if (userOrderRepository.existsByItemId(item.getId())) {
+                throw new BadRequestException("Cannot delete restaurant because some menu items have existing orders.");
+            }
+        }
+
+        menuItemRepository.deleteByRestaurantId(id);
+        restaurantRepository.delete(restaurant);
+    }
+
+    /**
+     * Re-scrapes the restaurant's URL and syncs menu items:
+     * - Existing items matched by name: update price/description
+     * - New items: insert
+     * - Removed items (no longer in scrape result): delete if not referenced by orders
+     */
+    @Transactional
+    public List<MenuItemResponse> getMenuByRestaurant(Long restaurantId) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found with id=" + restaurantId));
+
+        List<MenuScrapeItemResponse> scraped = menuScraperService.scrape(restaurant.getScrapeUrl());
+
+        // Index existing items by name for upsert
+        List<MenuItem> existingItems = menuItemRepository.findByRestaurantId(restaurantId);
+        Map<String, MenuItem> existingByName = existingItems.stream()
+                .collect(Collectors.toMap(MenuItem::getName, Function.identity(), (a, b) -> a));
+
+        Set<String> scrapedNames = new HashSet<>();
+        List<MenuItem> finalItems = new ArrayList<>();
+
+        // Upsert: update existing or insert new
+        for (MenuScrapeItemResponse scrapeItem : scraped) {
+            scrapedNames.add(scrapeItem.name());
+            MenuItem existing = existingByName.get(scrapeItem.name());
+            if (existing != null) {
+                existing.setPrice(parsePrice(scrapeItem.price()));
+                existing.setDescription(scrapeItem.description());
+                finalItems.add(menuItemRepository.save(existing));
+            } else {
+                MenuItem newItem = new MenuItem();
+                newItem.setRestaurant(restaurant);
+                newItem.setName(scrapeItem.name());
+                newItem.setPrice(parsePrice(scrapeItem.price()));
+                newItem.setDescription(scrapeItem.description());
+                finalItems.add(menuItemRepository.save(newItem));
+            }
+        }
+
+        // Remove items no longer in the scraped list (only if not referenced by orders)
+        for (MenuItem existing : existingItems) {
+            if (!scrapedNames.contains(existing.getName())) {
+                if (!userOrderRepository.existsByItemId(existing.getId())) {
+                    menuItemRepository.delete(existing);
+                }
+                // If referenced by orders, keep it (won't appear in finalItems though)
+            }
+        }
+
+        return finalItems.stream().map(this::toMenuItemResponse).toList();
+    }
+
+    // ==================== Menu Items (read-only for ordering) ====================
+
+    public List<MenuItemResponse> getMenuItemsByRestaurant(Long restaurantId) {
+        return menuItemRepository.findByRestaurantId(restaurantId).stream()
+                .map(this::toMenuItemResponse)
+                .toList();
+    }
+
+    // ==================== Sessions ====================
 
     @Transactional
     public OrderSessionResponse createSession(OrderSessionRequest request) {
@@ -140,6 +226,8 @@ public class OrderService {
         return response;
     }
 
+    // ==================== User Orders ====================
+
     @Transactional
     @CacheEvict(cacheNames = "orderSessionSummary", key = "#request.sessionId")
     public UserOrderResponse placeOrder(UserOrderRequest request) {
@@ -183,8 +271,35 @@ public class OrderService {
         return response;
     }
 
+    // ==================== Helpers ====================
+
+    private BigDecimal parsePrice(String priceStr) {
+        if (priceStr == null || priceStr.isBlank()) {
+            return BigDecimal.ZERO;
+        }
+        String cleaned = priceStr.replaceAll("[^0-9.]", "");
+        if (cleaned.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            return new BigDecimal(cleaned);
+        } catch (NumberFormatException e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private RestaurantResponse toRestaurantResponse(Restaurant restaurant) {
+        return new RestaurantResponse(restaurant.getId(), restaurant.getName(), restaurant.getScrapeUrl());
+    }
+
     private MenuItemResponse toMenuItemResponse(MenuItem item) {
-        return new MenuItemResponse(item.getId(), item.getName(), item.getPrice());
+        return new MenuItemResponse(
+                item.getId(),
+                item.getName(),
+                item.getPrice(),
+                item.getDescription(),
+                item.getRestaurant().getId()
+        );
     }
 
     private OrderSessionResponse toSessionResponse(OrderSession session) {

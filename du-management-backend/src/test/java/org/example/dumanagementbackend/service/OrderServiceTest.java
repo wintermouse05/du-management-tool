@@ -15,12 +15,14 @@ import org.example.dumanagementbackend.dto.order.UserOrderRequest;
 import org.example.dumanagementbackend.dto.order.UserOrderResponse;
 import org.example.dumanagementbackend.entity.MenuItem;
 import org.example.dumanagementbackend.entity.OrderSession;
+import org.example.dumanagementbackend.entity.Restaurant;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.UserOrder;
 import org.example.dumanagementbackend.entity.enums.OrderSessionStatus;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.MenuItemRepository;
 import org.example.dumanagementbackend.repository.OrderSessionRepository;
+import org.example.dumanagementbackend.repository.RestaurantRepository;
 import org.example.dumanagementbackend.repository.UserOrderRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,12 @@ class OrderServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private RestaurantRepository restaurantRepository;
+
+    @Mock
+    private MenuScraperService menuScraperService;
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
@@ -159,11 +167,21 @@ class OrderServiceTest {
         return user;
     }
 
+    private Restaurant buildRestaurant(Long id, String name, String url) {
+        Restaurant r = new Restaurant();
+        r.setId(id);
+        r.setName(name);
+        r.setScrapeUrl(url);
+        return r;
+    }
+
     private MenuItem buildItem(Long id, String name) {
+        Restaurant restaurant = buildRestaurant(1L, "Test Restaurant", "https://example.com");
         MenuItem item = new MenuItem();
         item.setId(id);
         item.setName(name);
         item.setPrice(BigDecimal.valueOf(30000));
+        item.setRestaurant(restaurant);
         return item;
     }
 }
