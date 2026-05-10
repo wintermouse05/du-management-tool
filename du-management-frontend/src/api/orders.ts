@@ -1,8 +1,9 @@
 import http from './http'
 import type {
-  MenuItemRequest, MenuItemResponse,
+  MenuItemResponse,
   MenuScrapeRequest, MenuScrapeItemResponse,
   OrderSessionRequest, OrderSessionResponse,
+  RestaurantRequest, RestaurantResponse,
   UserOrderRequest, UserOrderResponse,
   OrderSessionSummaryResponse,
   Page, Pageable
@@ -10,21 +11,26 @@ import type {
 import type { OrderSessionStatus } from '@/types'
 
 export const ordersApi = {
-  // Menu Items
-  getMenuItems(params?: Pageable) {
-    return http.get<Page<MenuItemResponse>>('/orders/menu-items', { params })
+  // Restaurants
+  getRestaurants() {
+    return http.get<RestaurantResponse[]>('/orders/restaurants')
   },
 
-  createMenuItem(data: MenuItemRequest) {
-    return http.post<MenuItemResponse>('/orders/menu-items', data)
+  saveRestaurant(data: RestaurantRequest) {
+    return http.post<RestaurantResponse>('/orders/restaurants', data)
   },
 
-  updateMenuItem(id: number, data: MenuItemRequest) {
-    return http.put<MenuItemResponse>(`/orders/menu-items/${id}`, data)
+  deleteRestaurant(id: number) {
+    return http.delete<void>(`/orders/restaurants/${id}`)
   },
 
-  deleteMenuItem(id: number) {
-    return http.delete<void>(`/orders/menu-items/${id}`)
+  getRestaurantMenu(id: number) {
+    return http.get<MenuItemResponse[]>(`/orders/restaurants/${id}/menu`)
+  },
+
+  // Scrape (preview)
+  scrapeMenu(data: MenuScrapeRequest) {
+    return http.post<MenuScrapeItemResponse[]>('/orders/scrape-menu', data)
   },
 
   // Sessions
@@ -61,9 +67,5 @@ export const ordersApi = {
     return http.patch<UserOrderResponse>('/orders/user-orders/paid', null, {
       params: { orderId, paid },
     })
-  },
-
-  scrapeMenu(data: MenuScrapeRequest) {
-    return http.post<MenuScrapeItemResponse[]>('/orders/scrape-menu', data)
   },
 }

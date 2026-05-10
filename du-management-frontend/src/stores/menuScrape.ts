@@ -9,6 +9,7 @@ import type { MenuScrapeItemResponse } from '@/types'
 export const useMenuScrapeStore = defineStore('menuScrape', () => {
   const scrapeUrl = ref('')
   const scrapedItems = ref<MenuScrapeItemResponse[]>([])
+  const restaurantName = ref('')
 
   function setResults(url: string, items: MenuScrapeItemResponse[]) {
     scrapeUrl.value = url
@@ -18,7 +19,8 @@ export const useMenuScrapeStore = defineStore('menuScrape', () => {
   function clear() {
     scrapeUrl.value = ''
     scrapedItems.value = []
+    restaurantName.value = ''
   }
 
-  return { scrapeUrl, scrapedItems, setResults, clear }
+  return { scrapeUrl, scrapedItems, restaurantName, setResults, clear }
 })

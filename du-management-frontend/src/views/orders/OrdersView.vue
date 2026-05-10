@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuScrapeStore } from '@/stores/menuScrape'
 import { ordersApi } from '@/api/orders'
-import type { MenuItemResponse, MenuScrapeItemResponse, OrderSessionResponse, OrderSessionSummaryResponse, UserOrderResponse } from '@/types'
+import type { MenuItemResponse, MenuScrapeItemResponse, OrderSessionResponse, OrderSessionSummaryResponse, RestaurantResponse, UserOrderResponse } from '@/types'
 import { OrderSessionStatus } from '@/types'
 import { wsService } from '@/services/websocket'
 import DataTable from 'primevue/datatable'
@@ -27,77 +27,97 @@ const menuScrapeStore = useMenuScrapeStore()
 const toast = useToast()
 const activeTab = ref('0')
 
-// Menu Items
+// ==================== Restaurants ====================
+const restaurants = ref<RestaurantResponse[]>([])
+const selectedRestaurantId = ref<number | null>(null)
 const menuItems = ref<MenuItemResponse[]>([])
 const menuLoading = ref(false)
-const menuDialog = ref(false)
-const menuForm = ref({ name: '', price: 0 })
-const menuEditing = ref(false)
-const menuEditingId = ref<number | null>(null)
-async function loadMenu() { menuLoading.value = true; try { const r = await ordersApi.getMenuItems({ size: 100 }); menuItems.value = r.data.content } finally { menuLoading.value = false } }
-function openCreateMenuItem() {
-  menuEditing.value = false
-  menuEditingId.value = null
-  menuForm.value = { name: '', price: 0 }
-  menuDialog.value = true
-}
-function openEditMenuItem(item: MenuItemResponse) {
-  menuEditing.value = true
-  menuEditingId.value = item.id
-  menuForm.value = { name: item.name, price: item.price }
-  menuDialog.value = true
-}
-async function saveMenuItem() {
+
+async function loadRestaurants() {
   try {
-    if (menuEditing.value && menuEditingId.value) {
-      await ordersApi.updateMenuItem(menuEditingId.value, menuForm.value)
-      toast.add({ severity:'success', summary:'Menu item updated', life:2000 })
-    } else {
-      await ordersApi.createMenuItem(menuForm.value)
-      toast.add({ severity:'success', summary:'Menu item added', life:2000 })
-    }
-    menuDialog.value = false
-    loadMenu()
-  } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 }) }
-}
-async function deleteMenuItem(id: number) {
-  try {
-    await ordersApi.deleteMenuItem(id)
-    toast.add({ severity:'warn', summary:'Menu item deleted', life:2000 })
-    loadMenu()
+    const r = await ordersApi.getRestaurants()
+    restaurants.value = r.data
   } catch (e: any) {
-    toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message || 'Cannot load restaurants', life: 3000 })
   }
 }
 
-// Menu Scrape (data persisted in Pinia store across route changes)
+async function loadRestaurantMenu() {
+  if (!selectedRestaurantId.value) return
+  menuLoading.value = true
+  try {
+    const r = await ordersApi.getRestaurantMenu(selectedRestaurantId.value)
+    menuItems.value = r.data
+    toast.add({ severity: 'success', summary: `Menu refreshed (${r.data.length} items)`, life: 2000 })
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Scrape failed', detail: e.response?.data?.message || e.message, life: 5000 })
+  } finally {
+    menuLoading.value = false
+  }
+}
+
+async function deleteRestaurant(id: number) {
+  try {
+    await ordersApi.deleteRestaurant(id)
+    toast.add({ severity: 'warn', summary: 'Restaurant deleted', life: 2000 })
+    if (selectedRestaurantId.value === id) {
+      selectedRestaurantId.value = null
+      menuItems.value = []
+    }
+    loadRestaurants()
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message || e.message, life: 3000 })
+  }
+}
+
+// Watch restaurant dropdown selection — auto re-scrape
+watch(selectedRestaurantId, (newVal) => {
+  if (newVal) {
+    loadRestaurantMenu()
+  } else {
+    menuItems.value = []
+  }
+})
+
+// ==================== Menu Scrape & Save ====================
 const scraping = ref(false)
+const saving = ref(false)
+
 async function scrapeMenu() {
   if (!menuScrapeStore.scrapeUrl.trim()) {
-    toast.add({ severity:'warn', summary:'Please enter a URL', life:2000 })
+    toast.add({ severity: 'warn', summary: 'Please enter a URL', life: 2000 })
     return
   }
   scraping.value = true
   try {
     const r = await ordersApi.scrapeMenu({ url: menuScrapeStore.scrapeUrl.trim() })
     menuScrapeStore.setResults(menuScrapeStore.scrapeUrl.trim(), r.data)
-    toast.add({ severity:'success', summary:`Found ${r.data.length} item(s)`, life:2000 })
+    toast.add({ severity: 'success', summary: `Found ${r.data.length} item(s)`, life: 2000 })
   } catch (e: any) {
-    toast.add({ severity:'error', summary:'Scrape failed', detail: e.response?.data?.message || e.message, life:5000 })
+    toast.add({ severity: 'error', summary: 'Scrape failed', detail: e.response?.data?.message || e.message, life: 5000 })
   } finally { scraping.value = false }
 }
-async function addScrapedToMenu(item: MenuScrapeItemResponse) {
-  try {
-    const price = parseInt(item.price.replace(/[^0-9]/g, ''), 10) || 0
-    await ordersApi.createMenuItem({ name: item.name, price })
-    toast.add({ severity:'success', summary:'Added to menu', detail: item.name, life:2000 })
-    loadMenu()
-  } catch (e: any) {
-    toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message || e.message, life:3000 })
+
+async function saveAsRestaurant() {
+  if (!menuScrapeStore.restaurantName.trim()) {
+    toast.add({ severity: 'warn', summary: 'Please enter a restaurant name', life: 2000 })
+    return
   }
+  saving.value = true
+  try {
+    await ordersApi.saveRestaurant({
+      name: menuScrapeStore.restaurantName.trim(),
+      scrapeUrl: menuScrapeStore.scrapeUrl.trim()
+    })
+    toast.add({ severity: 'success', summary: 'Restaurant saved!', life: 2000 })
+    menuScrapeStore.clear()
+    loadRestaurants()
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message || e.message, life: 3000 })
+  } finally { saving.value = false }
 }
 
-// Sessions
+// ==================== Sessions ====================
 const sessions = ref<OrderSessionResponse[]>([])
 const sessLoading = ref(false)
 const sessDialog = ref(false)
@@ -113,7 +133,7 @@ async function updateStatus(id: number, status: OrderSessionStatus) {
   } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 }) }
 }
 
-// Orders
+// ==================== Orders ====================
 const orders = ref<UserOrderResponse[]>([])
 const ordLoading = ref(false)
 const selectedSession = ref<number|null>(null)
@@ -154,9 +174,9 @@ function fmtDate(d: string) { return d ? new Date(d).toLocaleDateString('en-US',
 
 let sub: any = null
 
-onMounted(() => { 
-  loadMenu(); 
-  loadSessions();
+onMounted(() => {
+  loadRestaurants()
+  loadSessions()
   sub = wsService.subscribe('/topic/orders', () => {
     loadSessions()
     if (selectedSession.value) {
@@ -172,50 +192,100 @@ onUnmounted(() => {
 
 <template>
   <div class="page-container">
-    <div class="page-header"><div><h2>Orders</h2><p class="page-subtitle">Menu items, order sessions, and food orders</p></div></div>
+    <div class="page-header"><div><h2>Orders</h2><p class="page-subtitle">Restaurants, order sessions, and food orders</p></div></div>
     <div class="content-card">
       <Tabs :value="activeTab">
         <TabList>
-          <Tab value="0">Menu Items</Tab>
+          <Tab value="0">Menu</Tab>
           <Tab value="1">Sessions</Tab>
           <Tab value="2">Orders</Tab>
         </TabList>
         <TabPanels>
+          <!-- ==================== Menu Tab ==================== -->
           <TabPanel value="0">
-            <div style="display:flex;justify-content:flex-end;margin-bottom:var(--space-4);"><Button v-if="auth.isAdminOrHR" label="Add Item" icon="pi pi-plus" size="small" @click="openCreateMenuItem" /></div>
-            <DataTable :value="menuItems" :loading="menuLoading" stripedRows>
-              <Column field="name" header="Name" /><Column field="price" header="Price"><template #body="{data}">{{ data.price.toLocaleString() }} ₫</template></Column>
-              <Column v-if="auth.isAdminOrHR" header="Actions" style="width:120px">
-                <template #body="{ data }">
-                  <Button icon="pi pi-pencil" text rounded severity="info" @click="openEditMenuItem(data)" />
-                  <Button icon="pi pi-trash" text rounded severity="danger" @click="deleteMenuItem(data.id)" />
-                </template>
-              </Column>
-            </DataTable>
+            <!-- Restaurant Dropdown -->
+            <div style="margin-bottom:var(--space-6);">
+              <h3 style="margin-bottom:var(--space-3);">Select Restaurant</h3>
+              <p style="color:var(--theme-text-weak);font-size:13px;margin-bottom:var(--space-3);">Choose a saved restaurant to load its latest menu. The menu will be re-scraped from the source.</p>
+              <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
+                <Select
+                  v-model="selectedRestaurantId"
+                  :options="restaurants"
+                  optionLabel="name"
+                  optionValue="id"
+                  placeholder="Select a restaurant..."
+                  showClear
+                  style="flex:1;min-width:280px;"
+                />
+                <Button
+                  v-if="selectedRestaurantId && auth.isAdminOrHR"
+                  icon="pi pi-trash"
+                  severity="danger"
+                  text
+                  rounded
+                  v-tooltip.top="'Delete Restaurant'"
+                  @click="deleteRestaurant(selectedRestaurantId!)"
+                />
+              </div>
+            </div>
 
-            <!-- Scrape Menu from URL -->
+            <!-- Menu Items Table (from selected restaurant) -->
+            <div v-if="selectedRestaurantId">
+              <h4 style="margin-bottom:var(--space-3);">Menu Items</h4>
+              <DataTable :value="menuItems" :loading="menuLoading" stripedRows>
+                <Column field="name" header="Name" />
+                <Column field="price" header="Price"><template #body="{data}">{{ data.price.toLocaleString() }} ₫</template></Column>
+                <Column field="description" header="Description" />
+              </DataTable>
+            </div>
+
+            <div v-if="!selectedRestaurantId && restaurants.length > 0" style="text-align:center;padding:var(--space-8) 0;color:var(--theme-text-weak);">
+              <i class="pi pi-shop" style="font-size:2.5rem;margin-bottom:var(--space-3);display:block;opacity:0.4;"></i>
+              <p>Select a restaurant above to view its menu</p>
+            </div>
+
+            <div v-if="restaurants.length === 0 && menuScrapeStore.scrapedItems.length === 0" style="text-align:center;padding:var(--space-8) 0;color:var(--theme-text-weak);">
+              <i class="pi pi-shop" style="font-size:2.5rem;margin-bottom:var(--space-3);display:block;opacity:0.4;"></i>
+              <p>No restaurants saved yet. Use the scraper below to add one.</p>
+            </div>
+
+            <!-- Scrape & Save Section -->
             <div style="margin-top:var(--space-8); padding-top:var(--space-6); border-top: 1px solid var(--theme-divider);">
               <h3 style="margin-bottom:var(--space-2);">Scrape Menu from URL</h3>
-              <p style="color:var(--theme-text-weak);font-size:13px;margin-bottom:var(--space-4);">Paste a GrabFood or ShopeeFood link to parse its menu items.</p>
+              <p style="color:var(--theme-text-weak);font-size:13px;margin-bottom:var(--space-4);">Paste a GrabFood or ShopeeFood link to parse its menu items. After parsing, you can save it as a restaurant.</p>
               <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
                 <InputText v-model="menuScrapeStore.scrapeUrl" placeholder="https://food.grab.com/vn/vi/restaurant/..." style="flex:1;min-width:280px;" />
                 <Button label="Parse Menu" icon="pi pi-search" :loading="scraping" @click="scrapeMenu" />
               </div>
+
+              <!-- Scraped Results -->
               <div v-if="menuScrapeStore.scrapedItems.length > 0" style="margin-top:var(--space-5);">
                 <h4 style="margin-bottom:var(--space-3);">Scraped Items ({{ menuScrapeStore.scrapedItems.length }})</h4>
                 <DataTable :value="menuScrapeStore.scrapedItems" stripedRows>
                   <Column field="name" header="Name" />
                   <Column field="price" header="Price" />
                   <Column field="description" header="Description" />
-                  <Column v-if="auth.isAdminOrHR" header="" style="width:80px;text-align:center;">
-                    <template #body="{ data }">
-                      <Button icon="pi pi-plus" size="small" rounded text severity="success" v-tooltip.top="'Add to Menu'" @click="addScrapedToMenu(data)" />
-                    </template>
-                  </Column>
                 </DataTable>
+
+                <!-- Save as Restaurant -->
+                <div v-if="auth.isAdminOrHR" style="margin-top:var(--space-5); padding:var(--space-4); border:1px solid var(--theme-divider); border-radius:var(--radius-md); background:var(--theme-surface-hover);">
+                  <h4 style="margin-bottom:var(--space-3);">Save as Restaurant</h4>
+                  <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
+                    <InputText v-model="menuScrapeStore.restaurantName" placeholder="Restaurant name (e.g. Phúc Long Landmark 81)" style="flex:1;min-width:280px;" />
+                    <Button
+                      label="Save Restaurant"
+                      icon="pi pi-save"
+                      :loading="saving"
+                      :disabled="!menuScrapeStore.restaurantName.trim()"
+                      @click="saveAsRestaurant"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </TabPanel>
+
+          <!-- ==================== Sessions Tab ==================== -->
           <TabPanel value="1">
             <div style="display:flex;justify-content:flex-end;margin-bottom:var(--space-4);"><Button v-if="auth.isAdminOrHR" label="New Session" icon="pi pi-plus" size="small" @click="sessDialog=true" /></div>
             <DataTable :value="sessions" :loading="sessLoading" stripedRows>
@@ -229,6 +299,8 @@ onUnmounted(() => {
               </Column>
             </DataTable>
           </TabPanel>
+
+          <!-- ==================== Orders Tab ==================== -->
           <TabPanel value="2">
             <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4);align-items:center;">
               <Select v-model="selectedSession" :options="sessions" optionLabel="id" optionValue="id" placeholder="Select Session" style="width:200px" />
@@ -260,14 +332,6 @@ onUnmounted(() => {
         </TabPanels>
       </Tabs>
     </div>
-    <!-- Menu Item Dialog -->
-    <Dialog v-model:visible="menuDialog" :header="menuEditing ? 'Edit Menu Item' : 'Add Menu Item'" modal :style="{width:'380px'}">
-      <div style="display:flex;flex-direction:column;gap:var(--space-4);">
-        <div class="form-field"><label>Name</label><InputText v-model="menuForm.name" fluid /></div>
-        <div class="form-field"><label>Price</label><InputNumber v-model="menuForm.price" fluid /></div>
-      </div>
-      <template #footer><Button label="Cancel" text @click="menuDialog=false" /><Button :label="menuEditing ? 'Update' : 'Add'" icon="pi pi-check" @click="saveMenuItem" /></template>
-    </Dialog>
     <!-- Session Dialog -->
     <Dialog v-model:visible="sessDialog" header="New Order Session" modal :style="{width:'380px'}">
       <div class="form-field"><label>Deadline</label><DatePicker v-model="sessDeadline" showTime hourFormat="24" fluid /></div>
@@ -284,3 +348,9 @@ onUnmounted(() => {
     </Dialog>
   </div>
 </template>
+
+<style scoped>
+:deep(.p-select-label) {
+  color: var(--theme-text-primary) !important;
+}
+</style>

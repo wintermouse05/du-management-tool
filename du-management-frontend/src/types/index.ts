@@ -174,15 +174,23 @@ export interface SeminarVoteResponse {
 // Order DTOs
 // ============================================================
 
-export interface MenuItemRequest {
+export interface RestaurantRequest {
   name: string
-  price: number
+  scrapeUrl: string
+}
+
+export interface RestaurantResponse {
+  id: number
+  name: string
+  scrapeUrl: string
 }
 
 export interface MenuItemResponse {
   id: number
   name: string
   price: number
+  description: string | null
+  restaurantId: number
 }
 
 export interface OrderSessionRequest {
