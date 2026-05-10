@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-//@Transactional(readOnly = true)
+@Transactional(readOnly = true)
 public class AuthService {
 
     private final AuthenticationManager authenticationManager;
@@ -42,6 +42,7 @@ public class AuthService {
         return new LoginResponse(token, "Bearer", user.getUsername(), user.getRole().getName(), user.getId());
     }
 
+    @Transactional
     public LoginResponse register(RegisterRequest request) {
         if (request.username() == null || request.username().isBlank()) {
             throw new BadRequestException("username is required");
