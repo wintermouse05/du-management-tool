@@ -9,7 +9,7 @@ export const lateRecordsApi = {
     return http.post<LateRecordResponse>('/late-records', data)
   },
 
-  getAll(params?: Pageable) {
+  getAll(params?: Pageable & { fromDate?: string; toDate?: string }) {
     return http.get<Page<LateRecordResponse>>('/late-records', { params })
   },
 
@@ -27,5 +27,15 @@ export const lateRecordsApi = {
 
   exportCsv(params?: { year?: number; month?: number }) {
     return http.get<Blob>('/late-records/export', { params, responseType: 'blob' as const })
+  },
+
+  checkNow(channelId?: string) {
+    return http.post<{ message: string }>('/late-records/check-now', null, {
+      params: channelId ? { channelId } : undefined,
+    })
+  },
+
+  deleteRecord(id: number) {
+    return http.delete<void>(`/late-records/${id}`)
   },
 }

@@ -22,17 +22,40 @@ const activeTab = ref('0')
 // All records
 const records = ref<LateRecordResponse[]>([])
 const total = ref(0); const loading = ref(false); const pg = ref(0); const rows = ref(10)
+const fromDate = ref<Date|null>(null); const toDate = ref<Date|null>(null)
 const dialog = ref(false)
 const form = ref({ userId: 0, recordDate: '', minutesLate: 0, reason: '' })
 const formDate = ref<Date|null>(null)
 
-async function load() { loading.value = true; try { const r = await lateRecordsApi.getAll({ page: pg.value, size: rows.value }); records.value = r.data.content; total.value = r.data.totalElements } finally { loading.value = false } }
+async function load() {
+  loading.value = true
+  try {
+    const params: any = { page: pg.value, size: rows.value }
+    if (fromDate.value) params.fromDate = fromDate.value.toISOString().split('T')[0]
+    if (toDate.value) params.toDate = toDate.value.toISOString().split('T')[0]
+    const r = await lateRecordsApi.getAll(params)
+    records.value = r.data.content; total.value = r.data.totalElements
+  } finally { loading.value = false }
+}
 function onPage(e: any) { pg.value = e.page; rows.value = e.rows; load() }
 
 async function create() {
   if (formDate.value) form.value.recordDate = formDate.value.toISOString().split('T')[0]
   try { await lateRecordsApi.create(form.value); toast.add({ severity:'success', summary:'Record created', life:2000 }); dialog.value = false; load()
   } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 }) }
+}
+
+async function deleteRecord(id: number) {
+  try { await lateRecordsApi.deleteRecord(id); toast.add({ severity:'warn', summary:'Record deleted', life:2000 }); load()
+  } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 }) }
+}
+
+async function checkNow() {
+  try {
+    const r = await lateRecordsApi.checkNow()
+    toast.add({ severity:'success', summary:'Check completed', detail: r.data.message, life:3000 })
+    load()
+  } catch (e: any) { toast.add({ severity:'error', summary:'Check failed', detail: e.response?.data?.message, life:3000 }) }
 }
 
 // Summary
@@ -65,6 +88,7 @@ onMounted(load)
     <div class="page-header">
       <div><h2>Late Records</h2><p class="page-subtitle">Track and manage late arrivals</p></div>
       <div style="display:flex;gap:8px;">
+        <Button label="Check Now" icon="pi pi-sync" severity="secondary" outlined @click="checkNow" />
         <Button label="Export CSV" icon="pi pi-download" severity="secondary" outlined @click="exportCsv" />
         <Button label="Add Record" icon="pi pi-plus" @click="dialog=true" />
       </div>
@@ -74,8 +98,21 @@ onMounted(load)
         <TabList><Tab value="0">All Records</Tab><Tab value="1">Monthly Summary</Tab></TabList>
         <TabPanels>
           <TabPanel value="0">
+            <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4);align-items:center;">
+              <span class="form-field"><label style="display:inline;margin-right:4px;">From</label><DatePicker v-model="fromDate" style="width:140px" @date-select="load" /></span>
+              <span class="form-field"><label style="display:inline;margin-right:4px;">To</label><DatePicker v-model="toDate" style="width:140px" @date-select="load" /></span>
+              <Button label="Clear" size="small" text @click="fromDate=null;toDate=null;load()" />
+            </div>
             <DataTable :value="records" :loading="loading" :paginator="true" :rows="rows" :totalRecords="total" :lazy="true" @page="onPage" stripedRows>
-              <Column field="fullName" header="Name" /><Column field="recordDate" header="Date" /><Column field="minutesLate" header="Minutes Late" /><Column field="reason" header="Reason" />
+              <Column field="fullName" header="Name" />
+              <Column field="recordDate" header="Date" />
+              <Column field="minutesLate" header="Minutes Late" />
+              <Column field="reason" header="Reason" />
+              <Column header="Actions" style="width:80px">
+                <template #body="{ data }">
+                  <Button icon="pi pi-trash" text rounded severity="danger" @click="deleteRecord(data.id)" />
+                </template>
+              </Column>
             </DataTable>
           </TabPanel>
           <TabPanel value="1">

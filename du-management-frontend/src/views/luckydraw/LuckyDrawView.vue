@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { eventsApi } from '@/api/events'
 import { membersApi } from '@/api/members'
@@ -23,6 +23,8 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import MultiSelect from 'primevue/multiselect'
 import { useToast } from 'primevue/usetoast'
+import FortuneWheel from 'vue-fortune-wheel'
+import 'vue-fortune-wheel/style.css'
 
 const auth = useAuthStore()
 const toast = useToast()
@@ -42,6 +44,30 @@ const prizeDialog = ref(false); const prizeForm = ref({ prizeName: '', quantity:
 const participantDialog = ref(false)
 const selectedParticipantIds = ref<number[]>([])
 
+const wheelDialog = ref(false)
+const wheelWinnerUserId = ref<number>(0)
+const wheelVerify = ref(true)
+
+const palette = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#34d399', '#22d3ee', '#818cf8', '#c084fc', '#f472b6']
+const wheelParticipants = computed(() => {
+  if (!participants.value.length) return []
+  return participants.value.map((p, i) => ({
+    id: p.userId,
+    name: p.fullName.split(' ')[0], // First name for short display
+    value: p.fullName,
+    bgColor: palette[i % palette.length],
+    color: '#ffffff',
+    probability: 100 / participants.value.length
+  }))
+})
+
+const canvasOptions = {
+  btnWidth: 140,
+  borderColor: '#584b43',
+  borderWidth: 6,
+  lineHeight: 30
+}
+
 let sub: any = null
 
 onMounted(async () => {
@@ -54,9 +80,12 @@ onMounted(async () => {
   }
   sub = wsService.subscribe('/topic/lucky-draw', (message) => {
     const newWinner = JSON.parse(message.body) as LuckyDrawWinnerResponse
-    toast.add({ severity: 'success', summary: '🎉 New Winner!', detail: `${newWinner.fullName} won ${newWinner.prizeName}!`, life: 5000 })
     if (selectedPrize.value === newWinner.prizeId) {
       loadWinners()
+    }
+    // Only show toast if the admin is not actively spinning the wheel for this prize
+    if (!wheelDialog.value) {
+      toast.add({ severity: 'success', summary: '🎉 New Winner!', detail: `${newWinner.fullName} won ${newWinner.prizeName}!`, life: 5000 })
     }
   })
 })
@@ -109,15 +138,45 @@ async function setupParticipants() {
     toast.add({ severity:'success', summary:'Participants updated', life:2500 })
     participantDialog.value = false
     await loadParticipants()
-    await loadSessions()
+    
+    // Update the session's participant count locally to avoid reloading all sessions and clearing state
+    const currentSession = sessions.value.find(s => s.id === selectedSession.value)
+    if (currentSession) {
+      currentSession.participantCount = selectedParticipantIds.value.length
+    }
   } catch (e: any) {
     toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 })
   }
 }
-async function drawWinner() {
+function openWheelDialog(prizeId: number) {
+  if (!participants.value.length) {
+    toast.add({ severity: 'error', summary: 'No participants', detail: 'Setup participants first.', life: 3000 })
+    return
+  }
+  selectedPrize.value = prizeId
+  wheelVerify.value = true
+  wheelWinnerUserId.value = 0
+  wheelDialog.value = true
+}
+
+async function onCanvasRotateStart(rotate: Function) {
   if (!selectedPrize.value) return
-  try { await luckyDrawApi.drawWinnerFromPool(selectedPrize.value); toast.add({ severity:'success', summary:'🎉 Winner drawn!', life:3000 }); loadWinners(); loadParticipants()
-  } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 }) }
+  try {
+    const r = await luckyDrawApi.drawWinnerFromPool(selectedPrize.value)
+    wheelWinnerUserId.value = r.data.userId
+    wheelVerify.value = false
+    rotate()
+  } catch (e: any) {
+    toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 })
+    wheelDialog.value = false
+  }
+}
+
+function onRotateEnd(prize: any) {
+  toast.add({ severity: 'success', summary: '🎉 Winner drawn!', detail: `${prize.value} has won!`, life: 5000 })
+  wheelDialog.value = false
+  loadWinners()
+  loadParticipants()
 }
 
 function openParticipantDialog() {
@@ -162,9 +221,9 @@ function openParticipantDialog() {
           <Column field="prizeName" header="Prize" /><Column field="quantity" header="Qty" />
           <Column header="">
             <template #body="{data}">
-              <div style="display:flex;gap:4px;">
-                <Button label="View Winners" size="small" outlined @click="selectedPrize=data.id;loadWinners()" />
-                <Button v-if="auth.isAdminOrHR" label="Draw" size="small" severity="success" icon="pi pi-bolt" @click="selectedPrize=data.id;drawWinner()" />
+              <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <Button label="View Winners" size="small" outlined @click="selectedPrize=data.id;loadWinners()" style="white-space: nowrap;" />
+                <Button v-if="auth.isAdminOrHR" label="Draw" size="small" severity="success" icon="pi pi-bolt" @click="openWheelDialog(data.id)" style="white-space: nowrap;" />
               </div>
             </template>
           </Column>
@@ -208,6 +267,22 @@ function openParticipantDialog() {
         <Button label="Cancel" text @click="participantDialog=false" />
         <Button label="Save" icon="pi pi-check" @click="setupParticipants" />
       </template>
+    </Dialog>
+    
+    <Dialog v-model:visible="wheelDialog" header="Spin to Win!" modal :style="{width:'600px'}">
+      <div style="display:flex; justify-content:center; align-items:center; padding:var(--space-4);">
+        <FortuneWheel
+          v-if="wheelParticipants.length"
+          style="width: 500px; max-width: 100%;"
+          :verify="wheelVerify"
+          :canvas="canvasOptions"
+          :prizes="wheelParticipants"
+          :prizeId="wheelWinnerUserId"
+          @rotateStart="onCanvasRotateStart"
+          @rotateEnd="onRotateEnd"
+        />
+        <div v-else>No participants available.</div>
+      </div>
     </Dialog>
   </div>
 </template>

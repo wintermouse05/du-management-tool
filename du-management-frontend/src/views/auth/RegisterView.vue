@@ -4,13 +4,14 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import InputText from 'primevue/inputtext'
 import Password from 'primevue/password'
+import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 
 const router = useRouter()
 const auth = useAuthStore()
 const toast = useToast()
-const form = ref({ username: '', email: '', fullName: '', password: '' })
+const form = ref({ username: '', email: '', fullName: '', password: '', dob: null as Date | null })
 const loading = ref(false)
 const error = ref('')
 
@@ -21,7 +22,11 @@ async function handleRegister() {
   }
   loading.value = true
   try {
-    await auth.register(form.value)
+    const payload = {
+      ...form.value,
+      dob: form.value.dob ? form.value.dob.toISOString().split('T')[0] : null
+    }
+    await auth.register(payload)
     toast.add({ severity: 'success', summary: 'Account created!', life: 3000 })
     router.push('/')
   } catch (err: any) {
@@ -53,6 +58,10 @@ async function handleRegister() {
           <div class="form-field">
             <label for="reg-fullname">Full Name</label>
             <InputText id="reg-fullname" v-model="form.fullName" placeholder="Your full name" fluid />
+          </div>
+          <div class="form-field">
+            <label for="reg-dob">Date of Birth</label>
+            <DatePicker id="reg-dob" v-model="form.dob" placeholder="Select your birth date" fluid />
           </div>
           <div class="form-field">
             <label for="reg-password">Password *</label>

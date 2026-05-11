@@ -45,6 +45,7 @@ const enabledOptions = [
 const channelTypeOptions = [
   { label: 'EMAIL', value: 'EMAIL' },
   { label: 'WEBHOOK', value: 'WEBHOOK' },
+  { label: 'CHAT', value: 'CHAT' },
 ]
 
 const channelDialogVisible = ref(false)

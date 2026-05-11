@@ -74,4 +74,21 @@ export const notificationsApi = {
   deleteChannel(id: number) {
     return http.delete<void>(`/notifications/channels/${id}`)
   },
+
+  // Notification Schedules
+  getSchedules() {
+    return http.get<import('@/types').NotificationScheduleResponse[]>('/notification-schedules')
+  },
+
+  getScheduleByType(type: string) {
+    return http.get<import('@/types').NotificationScheduleResponse>(`/notification-schedules/${type}`)
+  },
+
+  upsertSchedule(type: string, payload: { sendTime: string; channelId?: string; enabled: boolean }) {
+    return http.put<import('@/types').NotificationScheduleResponse>(`/notification-schedules/${type}`, payload)
+  },
+
+  deleteSchedule(id: number) {
+    return http.delete<void>(`/notification-schedules/${id}`)
+  },
 }

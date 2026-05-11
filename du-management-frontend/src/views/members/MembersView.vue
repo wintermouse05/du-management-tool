@@ -28,7 +28,9 @@ const statusFilter = ref<UserStatus | null>(null)
 const dialogVisible = ref(false)
 const editing = ref(false)
 const editingId = ref<number | null>(null)
-const form = ref<MemberRequest>({ roleId: 0, username: '', email: '', fullName: '', password: '' })
+const form = ref<MemberRequest>({ roleId: 0, username: '', email: '', fullName: '', password: '', dob: null, joinDate: null })
+const formDob = ref<Date | null>(null)
+const formJoinDate = ref<Date | null>(null)
 const importInput = ref<HTMLInputElement | null>(null)
 
 async function loadMembers() {
@@ -52,17 +54,25 @@ function onPage(event: any) { page.value = event.page; rows.value = event.rows; 
 
 function openCreate() {
   editing.value = false; editingId.value = null
-  form.value = { roleId: roles.value[0]?.id || 0, username: '', email: '', fullName: '', password: '' }
+  form.value = { roleId: roles.value[0]?.id || 0, username: '', email: '', fullName: '', password: '', dob: null, joinDate: null }
+  formDob.value = null
+  formJoinDate.value = null
   dialogVisible.value = true
 }
 
 function openEdit(m: MemberResponse) {
   editing.value = true; editingId.value = m.id
-  form.value = { roleId: m.roleId, username: m.username, email: m.email, fullName: m.fullName, status: m.status }
+  form.value = { roleId: m.roleId, username: m.username, email: m.email, fullName: m.fullName, status: m.status, dob: m.dob, joinDate: m.joinDate }
+  formDob.value = m.dob ? new Date(m.dob) : null
+  formJoinDate.value = m.joinDate ? new Date(m.joinDate) : null
   dialogVisible.value = true
 }
 
 async function save() {
+  if (formDob.value) form.value.dob = formDob.value.toISOString().split('T')[0]
+  else form.value.dob = null
+  if (formJoinDate.value) form.value.joinDate = formJoinDate.value.toISOString().split('T')[0]
+  else form.value.joinDate = null
   try {
     if (editing.value && editingId.value) { await membersApi.update(editingId.value, form.value) }
     else { await membersApi.create(form.value) }
@@ -202,6 +212,8 @@ onMounted(() => { loadMembers(); loadRoles() })
         <div class="form-field"><label>Email</label><InputText v-model="form.email" fluid /></div>
         <div class="form-field"><label>Full Name</label><InputText v-model="form.fullName" fluid /></div>
         <div v-if="!editing" class="form-field"><label>Password</label><InputText v-model="form.password" type="password" fluid /></div>
+        <div class="form-field"><label>Date of Birth</label><DatePicker v-model="formDob" fluid /></div>
+        <div class="form-field"><label>Join Date</label><DatePicker v-model="formJoinDate" fluid /></div>
         <div v-if="editing" class="form-field"><label>Status</label>
           <Select v-model="form.status" :options="[{l:'Active',v:UserStatus.ACTIVE},{l:'Inactive',v:UserStatus.INACTIVE}]" optionLabel="l" optionValue="v" fluid />
         </div>

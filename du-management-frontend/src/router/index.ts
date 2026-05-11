@@ -92,6 +92,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/notifications/NotificationsView.vue'),
         meta: { roles: ['ADMIN'] },
       },
+      {
+        path: 'notification-schedules',
+        name: 'NotificationSchedules',
+        component: () => import('@/views/notifications/NotificationSchedulesView.vue'),
+        meta: { roles: ['ADMIN'] },
+      },
     ],
   },
 

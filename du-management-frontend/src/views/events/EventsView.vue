@@ -10,6 +10,7 @@ import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
+import Textarea from 'primevue/textarea'
 import DatePicker from 'primevue/datepicker'
 import { useToast } from 'primevue/usetoast'
 
@@ -24,7 +25,7 @@ const rows = ref(10)
 const dialogVisible = ref(false)
 const editing = ref(false)
 const editId = ref<number | null>(null)
-const form = ref<EventRequest>({ name: '', eventDate: '', location: '' })
+const form = ref<EventRequest>({ name: '', eventDate: '', location: '', description: '' })
 const formDate = ref<Date | null>(null)
 
 async function load() {
@@ -34,8 +35,8 @@ async function load() {
 }
 
 function onPage(e: any) { pg.value = e.page; rows.value = e.rows; load() }
-function openCreate() { editing.value = false; editId.value = null; form.value = { name: '', eventDate: '', location: '' }; formDate.value = null; dialogVisible.value = true }
-function openEdit(ev: EventResponse) { editing.value = true; editId.value = ev.id; form.value = { name: ev.name, eventDate: ev.eventDate, location: ev.location || '' }; formDate.value = ev.eventDate ? new Date(ev.eventDate) : null; dialogVisible.value = true }
+function openCreate() { editing.value = false; editId.value = null; form.value = { name: '', eventDate: '', location: '', description: '' }; formDate.value = null; dialogVisible.value = true }
+function openEdit(ev: EventResponse) { editing.value = true; editId.value = ev.id; form.value = { name: ev.name, eventDate: ev.eventDate, location: ev.location || '', description: ev.description || '' }; formDate.value = ev.eventDate ? new Date(ev.eventDate) : null; dialogVisible.value = true }
 
 async function save() {
   if (formDate.value) form.value.eventDate = formDate.value.toISOString()
@@ -97,6 +98,7 @@ onMounted(load)
         <div class="form-field"><label>Event Name</label><InputText v-model="form.name" fluid /></div>
         <div class="form-field"><label>Date & Time</label><DatePicker v-model="formDate" showTime hourFormat="24" fluid /></div>
         <div class="form-field"><label>Location</label><InputText v-model="form.location" fluid /></div>
+        <div class="form-field"><label>Description</label><Textarea v-model="form.description" rows="3" fluid /></div>
       </div>
       <template #footer><Button label="Cancel" text @click="dialogVisible = false" /><Button :label="editing ? 'Update' : 'Create'" icon="pi pi-check" @click="save" /></template>
     </Dialog>

@@ -92,6 +92,10 @@ onMounted(() => {
         <div><div class="caption">Date</div><div style="font-weight:600;margin-top:4px;">{{ fmtDate(event.eventDate) }}</div></div>
         <div><div class="caption">Location</div><div style="font-weight:600;margin-top:4px;">{{ event.location || '—' }}</div></div>
       </div>
+      <div v-if="event.description" style="margin-top:var(--space-4);">
+        <div class="caption">Description</div>
+        <div style="margin-top:4px;white-space:pre-wrap;line-height:1.5;">{{ event.description }}</div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:var(--space-4);">
         <Button label="RSVP Yes" size="small" severity="success" @click="handleRsvp(RsvpStatus.YES)" />
         <Button label="RSVP Maybe" size="small" severity="warn" @click="handleRsvp(RsvpStatus.MAYBE)" />

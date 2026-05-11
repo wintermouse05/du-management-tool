@@ -75,6 +75,7 @@ export interface RegisterRequest {
   email: string
   fullName: string
   password: string
+  dob?: string | null
 }
 
 // ============================================================
@@ -114,6 +115,7 @@ export interface EventRequest {
   name: string
   eventDate: string
   location?: string
+  description?: string
 }
 
 export interface EventResponse {
@@ -121,6 +123,7 @@ export interface EventResponse {
   name: string
   eventDate: string
   location: string | null
+  description: string | null
 }
 
 export interface EventAttendanceRequest {
@@ -459,7 +462,7 @@ export interface NotificationUnreadCountResponse {
   unreadCount: number
 }
 
-export type NotificationChannelType = 'EMAIL' | 'WEBHOOK'
+export type NotificationChannelType = 'EMAIL' | 'WEBHOOK' | 'CHAT'
 
 export interface NotificationChannelRequest {
   type: NotificationChannelType
@@ -471,5 +474,20 @@ export interface NotificationChannelResponse {
   id: number
   type: NotificationChannelType
   endpoint: string
+  enabled: boolean
+}
+
+// ============================================================
+// Notification Schedule DTOs
+// ============================================================
+
+export type NotificationScheduleType = 'LATE' | 'EVENT' | 'BIRTHDAY' | 'ANNIVERSARY'
+
+export interface NotificationScheduleResponse {
+  id: number
+  type: NotificationScheduleType
+  sendTime: string
+  channelId: string | null
+  chatopsPostId: string | null
   enabled: boolean
 }

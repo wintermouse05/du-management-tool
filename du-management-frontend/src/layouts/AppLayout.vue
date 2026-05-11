@@ -55,6 +55,7 @@ const navItems = computed<NavItem[]>(() => {
     { label: 'Lucky Draw', icon: 'pi pi-gift', to: '/lucky-draw' },
     { label: 'Roles', icon: 'pi pi-shield', to: '/roles', roles: ['ADMIN'] },
     { label: 'Notifications', icon: 'pi pi-bell', to: '/notifications', roles: ['ADMIN'] },
+    { label: 'Notification Schedules', icon: 'pi pi-clock', to: '/notification-schedules', roles: ['ADMIN'] },
   ]
   return items.filter(item => {
     if (!item.roles) return true
