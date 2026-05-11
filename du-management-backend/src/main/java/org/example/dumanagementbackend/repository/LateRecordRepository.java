@@ -7,6 +7,8 @@ import org.example.dumanagementbackend.entity.LateRecord;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface LateRecordRepository extends JpaRepository<LateRecord, Long> {
 
@@ -17,4 +19,12 @@ public interface LateRecordRepository extends JpaRepository<LateRecord, Long> {
     List<LateRecord> findByRecordDateBetween(LocalDate startDate, LocalDate endDate);
 
     Page<LateRecord> findByRecordDateBetween(LocalDate startDate, LocalDate endDate, Pageable pageable);
+
+    @Modifying
+    @Transactional
+    void deleteByRecordDate(LocalDate date);
+
+    List<LateRecord> findByRecordDate(LocalDate date);
+
+    List<LateRecord> findByUser_IdAndRecordDateBetween(Long userId, LocalDate startDate, LocalDate endDate);
 }

@@ -33,6 +33,7 @@ import org.example.dumanagementbackend.repository.SeminarRepository;
 import org.example.dumanagementbackend.repository.SurveyRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import org.example.dumanagementbackend.repository.UserSurveyRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -63,6 +64,9 @@ public class NotificationService {
         private final NotificationEmailService notificationEmailService;
         private final NotificationChannelRepository notificationChannelRepository;
         private final WebClient webClient = WebClient.builder().build();
+
+        @Autowired(required = false)
+        private ChatopsNotificationService chatopsNotificationService;
 
         public Page<NotificationInboxResponse> getMyNotifications(Pageable pageable) {
                 User currentUser = getCurrentUser();
@@ -168,7 +172,7 @@ public class NotificationService {
                                 if (user.getStatus() != UserStatus.ACTIVE || !notifiedUserIds.contains(user.getId())) {
                                         continue;
                                 }
-                                sentCount += sendEventReminderToUser(user, event.getName(), event.getEventDate(), event.getLocation(), "/events");
+                                sentCount += sendEventReminderToUser(user, event.getName(), event.getEventDate(), event.getLocation(), event.getDescription(), "/events");
                                 notifiedUserIds.remove(user.getId());
                         }
                 }
@@ -183,6 +187,7 @@ public class NotificationService {
                                                         seminar.getTitle(),
                                                         seminar.getScheduledAt(),
                                                         "seminar room",
+                                                        seminar.getDescription(),
                                                         "/seminars"
                                         );
                                 }
@@ -240,14 +245,15 @@ public class NotificationService {
                 return sentCount;
         }
 
-        private int sendEventReminderToUser(User user, String eventName, LocalDateTime eventTime, String location, String actionUrl) {
+        private int sendEventReminderToUser(User user, String eventName, LocalDateTime eventTime, String location, String description, String actionUrl) {
                 String locationValue = (location == null || location.isBlank()) ? "TBD" : location;
                 NotificationTemplateService.RenderedTemplate renderedTemplate = notificationTemplateService.renderTemplate(
                                 NotificationTemplateService.TPL_EVENT_REMINDER,
                                 Map.of(
                                                 "eventName", eventName,
                                                 "eventTime", eventTime != null ? eventTime.format(DATE_TIME_FORMATTER) : "TBD",
-                                                "location", locationValue
+                                                "location", locationValue,
+                                                "description", description != null ? description : ""
                                 ),
                                 "Event starts in 1 hour: " + eventName,
                                 "Reminder: " + eventName + " starts at "
@@ -342,6 +348,15 @@ public class NotificationService {
                                 payload.put("type", type.name());
                                 payload.put("actionUrl", actionUrl);
                                 sendWebhook(channel.getEndpoint(), payload);
+                        }
+                        if (channel.getType() == NotificationChannelType.CHAT) {
+                                if (chatopsNotificationService != null) {
+                                        String chatMsg = "**" + title + "**\n" + message;
+                                        if (actionUrl != null && !actionUrl.isBlank()) {
+                                                chatMsg += "\n\n[Open](" + actionUrl + ")";
+                                        }
+                                        chatopsNotificationService.sendToChannel(chatMsg);
+                                }
                         }
                 }
 

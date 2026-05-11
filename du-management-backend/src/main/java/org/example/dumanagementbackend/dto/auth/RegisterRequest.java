@@ -20,6 +20,8 @@ public record RegisterRequest(
 
         @NotBlank(message = "password is required")
         @Size(min = 8, max = 128, message = "password must be between 8 and 128 characters")
-        String password
+        String password,
+
+        java.time.LocalDate dob
 ) {
 }

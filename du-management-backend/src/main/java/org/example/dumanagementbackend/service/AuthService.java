@@ -69,6 +69,7 @@ public class AuthService {
         user.setEmail(request.email());
         user.setFullName(request.fullName() != null && !request.fullName().isBlank() ? request.fullName() : request.username());
         user.setPassword(passwordEncoder.encode(request.password()));
+        user.setDob(request.dob());
         user.setJoinDate(LocalDate.now());
         user.setStatus(UserStatus.ACTIVE);
         user.setTotalPoints(0);

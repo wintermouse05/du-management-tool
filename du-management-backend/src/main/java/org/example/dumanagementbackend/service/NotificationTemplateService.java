@@ -72,7 +72,7 @@ public class NotificationTemplateService {
                 TPL_EVENT_REMINDER,
                 "Event Reminder",
                 "Event starts in 1 hour: {eventName}",
-                "Reminder: {eventName} starts at {eventTime} in {location}.",
+                "Reminder: {eventName} starts at {eventTime} in {location}.\n\n{description}",
                 true
         );
         ensureTemplate(

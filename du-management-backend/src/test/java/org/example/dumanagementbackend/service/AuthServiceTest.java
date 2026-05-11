@@ -54,28 +54,28 @@ class AuthServiceTest {
 
     @Test
     void register_throwsBadRequestWhenUsernameBlank() {
-        RegisterRequest req = new RegisterRequest("", "a@b.com", "Full Name", "password1");
+        RegisterRequest req = new RegisterRequest("", "a@b.com", "Full Name", "password1", null);
         assertThrows(BadRequestException.class, () -> authService.register(req));
         verify(userRepository, never()).save(any());
     }
 
     @Test
     void register_throwsBadRequestWhenEmailBlank() {
-        RegisterRequest req = new RegisterRequest("user1", "", "Full Name", "password1");
+        RegisterRequest req = new RegisterRequest("user1", "", "Full Name", "password1", null);
         assertThrows(BadRequestException.class, () -> authService.register(req));
         verify(userRepository, never()).save(any());
     }
 
     @Test
     void register_throwsBadRequestWhenPasswordBlank() {
-        RegisterRequest req = new RegisterRequest("user1", "a@b.com", "Full Name", "");
+        RegisterRequest req = new RegisterRequest("user1", "a@b.com", "Full Name", "", null);
         assertThrows(BadRequestException.class, () -> authService.register(req));
         verify(userRepository, never()).save(any());
     }
 
     @Test
     void register_throwsBadRequestWhenUsernameAlreadyExists() {
-        RegisterRequest req = new RegisterRequest("taken", "a@b.com", "Full Name", "secret123");
+        RegisterRequest req = new RegisterRequest("taken", "a@b.com", "Full Name", "secret123", null);
         when(userRepository.existsByUsername("taken")).thenReturn(true);
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> authService.register(req));
@@ -84,7 +84,7 @@ class AuthServiceTest {
 
     @Test
     void register_throwsBadRequestWhenEmailAlreadyExists() {
-        RegisterRequest req = new RegisterRequest("newuser", "taken@b.com", "Full Name", "secret123");
+        RegisterRequest req = new RegisterRequest("newuser", "taken@b.com", "Full Name", "secret123", null);
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
         when(userRepository.existsByEmail("taken@b.com")).thenReturn(true);
 
@@ -94,7 +94,7 @@ class AuthServiceTest {
 
     @Test
     void register_throwsNotFoundWhenMemberRoleMissing() {
-        RegisterRequest req = new RegisterRequest("newuser", "new@b.com", "Full Name", "secret123");
+        RegisterRequest req = new RegisterRequest("newuser", "new@b.com", "Full Name", "secret123", null);
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
         when(userRepository.existsByEmail("new@b.com")).thenReturn(false);
         when(roleRepository.findByName("MEMBER")).thenReturn(Optional.empty());
@@ -106,7 +106,7 @@ class AuthServiceTest {
 
     @Test
     void register_usesUsernameAsFullNameWhenFullNameNull() {
-        RegisterRequest req = new RegisterRequest("newuser", "new@b.com", null, "secret123");
+        RegisterRequest req = new RegisterRequest("newuser", "new@b.com", null, "secret123", null);
         Role role = buildRole(1L, "MEMBER");
 
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
@@ -129,7 +129,7 @@ class AuthServiceTest {
 
     @Test
     void register_successSetsActiveStatusAndZeroPoints() {
-        RegisterRequest req = new RegisterRequest("alice", "alice@b.com", "Alice Doe", "password99");
+        RegisterRequest req = new RegisterRequest("alice", "alice@b.com", "Alice Doe", "password99", null);
         Role role = buildRole(1L, "MEMBER");
 
         when(userRepository.existsByUsername("alice")).thenReturn(false);

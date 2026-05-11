@@ -1,5 +1,6 @@
 package org.example.dumanagementbackend.repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -58,4 +59,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
                          where u.id = :userId
                         """)
         int incrementTotalPoints(@Param("userId") Long userId, @Param("delta") int delta);
+
+    Optional<User> findByFullName(String fullName);
+
+    @Query("""
+            select u.fullName, count(lr) as lateCount
+              from LateRecord lr
+              join lr.user u
+             where lr.recordDate >= :monthStart
+               and lr.recordDate <= :monthEnd
+               and u.status = 'ACTIVE'
+             group by u.fullName
+            having count(lr) >= 2
+             order by lateCount desc
+            """)
+    List<Object[]> findRepeatLateOffendersInMonth(@Param("monthStart") LocalDate monthStart, @Param("monthEnd") LocalDate monthEnd);
 }

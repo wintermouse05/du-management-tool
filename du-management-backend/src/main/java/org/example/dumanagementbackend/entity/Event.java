@@ -30,4 +30,7 @@ public class Event extends AuditableEntity {
 
     @Column(length = 255)
     private String location;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
 }

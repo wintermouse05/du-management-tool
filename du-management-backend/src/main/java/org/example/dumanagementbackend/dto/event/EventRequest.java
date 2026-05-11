@@ -14,6 +14,8 @@ public record EventRequest(
         LocalDateTime eventDate,
 
         @Size(max = 255, message = "location must be at most 255 characters")
-        String location
+        String location,
+
+        String description
 ) {
 }

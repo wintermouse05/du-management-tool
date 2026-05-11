@@ -26,7 +26,7 @@ public class MenuItem extends AuditableEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "restaurant_id", nullable = false)
+    @JoinColumn(name = "restaurant_id", nullable = true)
     private Restaurant restaurant;
 
     @Column(nullable = false, length = 255)

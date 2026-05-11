@@ -116,10 +116,11 @@ public class EventService {
         event.setName(request.name());
         event.setEventDate(request.eventDate());
         event.setLocation(request.location());
+        event.setDescription(request.description());
     }
 
     private EventResponse toResponse(Event event) {
-        return new EventResponse(event.getId(), event.getName(), event.getEventDate(), event.getLocation());
+        return new EventResponse(event.getId(), event.getName(), event.getEventDate(), event.getLocation(), event.getDescription());
     }
 
     private EventAttendeeResponse toAttendeeResponse(EventAttendee attendee) {

@@ -62,7 +62,7 @@ class EventServiceTest {
 
     @Test
     void create_returnsEventResponse() {
-        EventRequest req = new EventRequest("Tech Talk", LocalDateTime.now().plusDays(5), "Room 101");
+        EventRequest req = new EventRequest("Tech Talk", LocalDateTime.now().plusDays(5), "Room 101", "Talk description");
         Event saved = buildEvent(1L, "Tech Talk");
 
         when(eventRepository.save(any(Event.class))).thenReturn(saved);
@@ -118,7 +118,7 @@ class EventServiceTest {
     @Test
     void update_updatesAndReturnsResponse() {
         Event existing = buildEvent(5L, "Old Name");
-        EventRequest req = new EventRequest("New Name", LocalDateTime.now().plusDays(1), "Hall A");
+        EventRequest req = new EventRequest("New Name", LocalDateTime.now().plusDays(1), "Hall A", "New Description");
 
         when(eventRepository.findById(5L)).thenReturn(Optional.of(existing));
         when(eventRepository.save(any(Event.class))).thenAnswer(inv -> inv.getArgument(0));

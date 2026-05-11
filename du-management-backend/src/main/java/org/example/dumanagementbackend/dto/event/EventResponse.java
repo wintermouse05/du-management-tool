@@ -6,6 +6,7 @@ public record EventResponse(
         Long id,
         String name,
         LocalDateTime eventDate,
-        String location
+        String location,
+        String description
 ) {
 }
