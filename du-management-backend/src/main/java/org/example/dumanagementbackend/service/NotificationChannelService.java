@@ -5,6 +5,8 @@ import java.util.List;
 import org.example.dumanagementbackend.dto.notification.NotificationChannelRequest;
 import org.example.dumanagementbackend.dto.notification.NotificationChannelResponse;
 import org.example.dumanagementbackend.entity.NotificationChannel;
+import org.example.dumanagementbackend.entity.enums.NotificationChannelType;
+import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.NotificationChannelRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -53,7 +55,11 @@ public class NotificationChannelService {
 
     private void apply(NotificationChannel channel, NotificationChannelRequest request) {
         channel.setType(request.type());
-        channel.setEndpoint(request.endpoint().trim());
+        if (request.type() == NotificationChannelType.WEBHOOK
+                && (request.endpoint() == null || request.endpoint().isBlank())) {
+            throw new BadRequestException("endpoint is required for WEBHOOK channel");
+        }
+        channel.setEndpoint(request.endpoint() != null ? request.endpoint().trim() : "");
         channel.setEnabled(Boolean.TRUE.equals(request.enabled()));
     }
 

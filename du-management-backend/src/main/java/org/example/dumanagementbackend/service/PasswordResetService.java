@@ -3,6 +3,8 @@ package org.example.dumanagementbackend.service;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.dumanagementbackend.dto.auth.LoginResponse;
@@ -28,6 +30,7 @@ public class PasswordResetService {
     private final NotificationEmailService notificationEmailService;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${app.password-reset.token-expiration-minutes:15}")
     private int tokenExpirationMinutes;
@@ -65,6 +68,16 @@ public class PasswordResetService {
 
     @Transactional
     public LoginResponse resetPassword(String token, String newPassword) {
+        return resetPassword(token, newPassword, null, null);
+    }
+
+    @Transactional
+    public LoginResponse resetPassword(
+            String token,
+            String newPassword,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
         PasswordResetToken resetToken = tokenRepository.findByToken(token)
                 .orElseThrow(() -> new BadRequestException("Invalid or expired reset token"));
 
@@ -83,6 +96,7 @@ public class PasswordResetService {
         tokenRepository.save(resetToken);
 
         String jwt = jwtService.generateToken(user.getUsername(), user.getRole().getName());
+        refreshTokenService.issueNewRefreshToken(user, httpRequest, httpResponse);
         return new LoginResponse(jwt, "Bearer", user.getUsername(), user.getRole().getName(), user.getId());
     }
 }

@@ -12,6 +12,8 @@ import org.example.dumanagementbackend.repository.RoleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import org.example.dumanagementbackend.security.JwtService;
 import java.time.LocalDate;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,22 +30,31 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     public LoginResponse login(LoginRequest request) {
+        return login(request, null, null);
+    }
+
+    public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.username(), request.password())
+                new UsernamePasswordAuthenticationToken(request.username(), request.password()) 
         );
 
         User user = userRepository.findByUsername(request.username())
                 .or(() -> userRepository.findByEmail(request.username()))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found for username/email=" + request.username()));
 
-        String token = jwtService.generateToken(user.getUsername(), user.getRole().getName());
-        return new LoginResponse(token, "Bearer", user.getUsername(), user.getRole().getName(), user.getId());
+        return createAuthenticatedSession(user, httpRequest, httpResponse);
     }
 
     @Transactional
     public LoginResponse register(RegisterRequest request) {
+        return register(request, null, null);
+    }
+
+    @Transactional
+    public LoginResponse register(RegisterRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         if (request.username() == null || request.username().isBlank()) {
             throw new BadRequestException("username is required");
         }
@@ -75,11 +86,37 @@ public class AuthService {
         user.setTotalPoints(0);
 
         User saved = userRepository.save(user);
-        String token = jwtService.generateToken(saved.getUsername(), saved.getRole().getName());
-        return new LoginResponse(token, "Bearer", saved.getUsername(), saved.getRole().getName(), saved.getId());
+        return createAuthenticatedSession(saved, httpRequest, httpResponse);
+    }
+
+    public LoginResponse refresh(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        String refreshToken = refreshTokenService.extractRefreshToken(httpRequest);
+        RefreshTokenService.RotationResult rotated = refreshTokenService.rotateRefreshToken(refreshToken, httpRequest);
+        refreshTokenService.attachRefreshTokenCookie(httpResponse, rotated.rawRefreshToken());
+        return buildAccessTokenResponse(rotated.user());
     }
 
     public void logout() {
-        // JWT is stateless, client removes token on logout.
+        logout(null, null);
+    }
+
+    public void logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        String refreshToken = refreshTokenService.extractRefreshToken(httpRequest);
+        refreshTokenService.revokeByRawToken(refreshToken, "LOGOUT");
+        refreshTokenService.clearRefreshTokenCookie(httpResponse);
+    }
+
+    private LoginResponse createAuthenticatedSession(
+            User user,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
+        refreshTokenService.issueNewRefreshToken(user, httpRequest, httpResponse);
+        return buildAccessTokenResponse(user);
+    }
+
+    private LoginResponse buildAccessTokenResponse(User user) {
+        String token = jwtService.generateToken(user.getUsername(), user.getRole().getName());
+        return new LoginResponse(token, "Bearer", user.getUsername(), user.getRole().getName(), user.getId());
     }
 }

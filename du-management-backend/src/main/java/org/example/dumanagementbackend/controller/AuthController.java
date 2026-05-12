@@ -7,10 +7,11 @@ import org.example.dumanagementbackend.dto.auth.RegisterRequest;
 import org.example.dumanagementbackend.dto.auth.ResetPasswordRequest;
 import org.example.dumanagementbackend.service.AuthService;
 import org.example.dumanagementbackend.service.PasswordResetService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,19 +26,31 @@ public class AuthController {
     private final PasswordResetService passwordResetService;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<LoginResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
+        return ResponseEntity.ok(authService.login(request, httpRequest, httpResponse));
     }
 
     @PostMapping("/register")
-    public ResponseEntity<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.ok(authService.register(request));
+    public ResponseEntity<LoginResponse> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
+        return ResponseEntity.ok(authService.register(request, httpRequest, httpResponse));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponse> refresh(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        return ResponseEntity.ok(authService.refresh(httpRequest, httpResponse));
     }
 
     @PostMapping("/logout")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Void> logout() {
-        authService.logout();
+    public ResponseEntity<Void> logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        authService.logout(httpRequest, httpResponse);
         return ResponseEntity.noContent().build();
     }
 
@@ -48,7 +61,13 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<LoginResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        return ResponseEntity.ok(passwordResetService.resetPassword(request.token(), request.newPassword()));
+    public ResponseEntity<LoginResponse> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
+        return ResponseEntity.ok(
+                passwordResetService.resetPassword(request.token(), request.newPassword(), httpRequest, httpResponse)
+        );
     }
 }
