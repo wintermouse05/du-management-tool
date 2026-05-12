@@ -4,6 +4,7 @@ import org.example.dumanagementbackend.dto.survey.SurveyCompletionRequest;
 import org.example.dumanagementbackend.dto.survey.SurveyProgressResponse;
 import org.example.dumanagementbackend.dto.survey.SurveyRequest;
 import org.example.dumanagementbackend.dto.survey.SurveyResponse;
+import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.service.SurveyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -53,8 +54,18 @@ public class SurveyController {
 
     @PostMapping("/{id}/assign")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
-    public ResponseEntity<SurveyProgressResponse> assign(@PathVariable Long id, @RequestParam Long userId) {
-        return ResponseEntity.ok(surveyService.assignToUser(id, userId));
+    public ResponseEntity<SurveyProgressResponse> assign(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Long groupId
+    ) {
+        if (groupId != null) {
+            return ResponseEntity.ok(surveyService.assignToGroup(id, groupId));
+        }
+        if (userId != null) {
+            return ResponseEntity.ok(surveyService.assignToUser(id, userId));
+        }
+        throw new BadRequestException("Either userId or groupId is required");
     }
 
     @PostMapping("/{id}/complete")

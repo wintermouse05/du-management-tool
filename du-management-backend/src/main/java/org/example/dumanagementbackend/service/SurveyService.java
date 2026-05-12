@@ -33,6 +33,7 @@ public class SurveyService {
     private final UserRepository userRepository;
     private final UserSurveyRepository userSurveyRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final GroupService groupService;
 
     @Transactional
     public SurveyResponse create(SurveyRequest request) {
@@ -59,13 +60,27 @@ public class SurveyService {
     @Transactional
     @CacheEvict(cacheNames = "surveyProgress", key = "#surveyId", beforeInvocation = true)
     public SurveyProgressResponse assignToUser(Long surveyId, Long userId) {
-        Survey survey = getEntityById(surveyId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + userId));
+        assignToUserInternal(surveyId, user);
+        return getProgress(surveyId);
+    }
 
+    @Transactional
+    @CacheEvict(cacheNames = "surveyProgress", key = "#surveyId", beforeInvocation = true)
+    public SurveyProgressResponse assignToGroup(Long surveyId, Long groupId) {
+        List<User> members = groupService.getResolvedMembers(groupId);
+        for (User user : members) {
+            assignToUserInternal(surveyId, user);
+        }
+        return getProgress(surveyId);
+    }
+
+    private void assignToUserInternal(Long surveyId, User user) {
+        Survey survey = getEntityById(surveyId);
         UserSurveyId id = new UserSurveyId();
         id.setSurveyId(surveyId);
-        id.setUserId(userId);
+        id.setUserId(user.getId());
 
         if (userSurveyRepository.findById(id).isEmpty()) {
             UserSurvey userSurvey = new UserSurvey();
@@ -75,7 +90,6 @@ public class SurveyService {
             userSurvey.setCompleted(false);
             userSurveyRepository.save(userSurvey);
         }
-        return getProgress(surveyId);
     }
 
     @Transactional

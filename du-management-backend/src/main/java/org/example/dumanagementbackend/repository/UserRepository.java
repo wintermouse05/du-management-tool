@@ -25,6 +25,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findByStatusOrderByTotalPointsDesc(UserStatus status);
 
+    long countByStatus(UserStatus status);
+
     Page<User> findByStatusOrderByTotalPointsDesc(UserStatus status, Pageable pageable);
 
         @Query("""

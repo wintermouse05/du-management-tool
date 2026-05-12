@@ -3,9 +3,11 @@ package org.example.dumanagementbackend.config;
 import org.example.dumanagementbackend.entity.PointRule;
 import org.example.dumanagementbackend.entity.Role;
 import org.example.dumanagementbackend.entity.User;
+import org.example.dumanagementbackend.entity.UserGroup;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.repository.PointRuleRepository;
 import org.example.dumanagementbackend.repository.RoleRepository;
+import org.example.dumanagementbackend.repository.UserGroupRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ public class RbacDataInitializer implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final PointRuleRepository pointRuleRepository;
+    private final UserGroupRepository userGroupRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${app.rbac.seed-default-users:true}")
@@ -53,6 +56,14 @@ public class RbacDataInitializer implements CommandLineRunner {
         createPointRuleIfMissing("EVENT_ATTENDANCE", 10);
         createPointRuleIfMissing("SEMINAR_COMPLETION", 15);
         createPointRuleIfMissing("LUCKY_DRAW_WIN", 20);
+
+        if (!userGroupRepository.existsByName("All")) {
+            UserGroup allGroup = new UserGroup();
+            allGroup.setName("All");
+            allGroup.setDescription("All active users in the system");
+            allGroup.setAllGroup(true);
+            userGroupRepository.save(allGroup);
+        }
     }
 
     private Role getOrCreateRole(String name, String description) {
