@@ -1,34 +1,29 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 import InputText from 'primevue/inputtext'
-import Password from 'primevue/password'
 import Button from 'primevue/button'
-import { useToast } from 'primevue/usetoast'
 
 const router = useRouter()
-const auth = useAuthStore()
-const toast = useToast()
 
-const username = ref('')
-const password = ref('')
+const email = ref('')
 const loading = ref(false)
 const error = ref('')
+const submitted = ref(false)
 
-async function handleLogin() {
+async function handleSubmit() {
   error.value = ''
-  if (!username.value || !password.value) {
-    error.value = 'Please enter both username and password'
+  if (!email.value) {
+    error.value = 'Please enter your email address'
     return
   }
   loading.value = true
   try {
-    await auth.login({ username: username.value, password: password.value })
-    toast.add({ severity: 'success', summary: 'Welcome back!', detail: `Logged in as ${auth.username}`, life: 3000 })
-    router.push('/')
+    await authApi.forgotPassword({ email: email.value })
+    submitted.value = true
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Invalid credentials. Please try again.'
+    error.value = err.response?.data?.message || 'Something went wrong. Please try again.'
   } finally {
     loading.value = false
   }
@@ -42,36 +37,23 @@ async function handleLogin() {
         <div class="auth-header">
           <div class="auth-logo">
             <div class="auth-logo-icon">
-              <i class="pi pi-th-large"></i>
+              <i class="pi pi-lock"></i>
             </div>
-            <h1>DU Manager</h1>
+            <h1>Reset Password</h1>
           </div>
-          <p class="auth-subtitle">Sign in to your account</p>
+          <p v-if="!submitted" class="auth-subtitle">Enter your email to receive a reset link</p>
         </div>
 
-        <form @submit.prevent="handleLogin" class="auth-form">
+        <form v-if="!submitted" @submit.prevent="handleSubmit" class="auth-form">
           <div class="form-field">
-            <label for="login-username">Username</label>
+            <label for="forgot-email">Email</label>
             <InputText
-              id="login-username"
-              v-model="username"
-              placeholder="Enter your username"
+              id="forgot-email"
+              v-model="email"
+              type="email"
+              placeholder="Enter your email address"
               :class="{ 'p-invalid': error }"
-              autocomplete="username"
-              fluid
-            />
-          </div>
-
-          <div class="form-field">
-            <label for="login-password">Password</label>
-            <Password
-              id="login-password"
-              v-model="password"
-              placeholder="Enter your password"
-              :feedback="false"
-              :class="{ 'p-invalid': error }"
-              toggleMask
-              autocomplete="current-password"
+              autocomplete="email"
               fluid
             />
           </div>
@@ -83,21 +65,34 @@ async function handleLogin() {
 
           <Button
             type="submit"
-            label="Sign In"
-            icon="pi pi-sign-in"
+            label="Send Reset Link"
+            icon="pi pi-envelope"
             :loading="loading"
             class="auth-submit"
             fluid
           />
         </form>
 
-        <div class="auth-footer">
-          <router-link to="/forgot-password" class="auth-link">Forgot password?</router-link>
+        <div v-else class="auth-success">
+          <div class="success-icon">
+            <i class="pi pi-check-circle"></i>
+          </div>
+          <p class="success-title">Check your email</p>
+          <p class="success-text">
+            If an account with that email exists, we've sent a password reset link.
+            Please check your inbox and spam folder.
+          </p>
+          <Button
+            label="Back to Login"
+            icon="pi pi-arrow-left"
+            class="p-button-outlined"
+            @click="router.push('/login')"
+            fluid
+          />
         </div>
 
         <div class="auth-footer">
-          <span>Don't have an account?</span>
-          <router-link to="/register" class="auth-link">Create account</router-link>
+          <router-link to="/login" class="auth-link">Back to sign in</router-link>
         </div>
       </div>
     </div>
@@ -190,14 +185,36 @@ async function handleLogin() {
   font-size: 15px !important;
 }
 
+.auth-success {
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.success-icon {
+  font-size: 48px;
+  color: var(--theme-green, #22c55e);
+  margin-bottom: var(--space-4);
+}
+
+.success-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.success-text {
+  color: var(--theme-text-weak);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: var(--space-6);
+}
+
 .auth-footer {
   margin-top: var(--space-6);
   text-align: center;
   font-size: 14px;
   color: var(--theme-text-weak);
-  display: flex;
-  gap: var(--space-2);
-  justify-content: center;
 }
 
 .auth-link {

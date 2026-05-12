@@ -16,6 +16,19 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/auth/RegisterView.vue'),
     meta: { requiresAuth: false },
   },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/auth/ForgotPasswordView.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/reset-password/:token',
+    name: 'ResetPassword',
+    component: () => import('@/views/auth/ResetPasswordView.vue'),
+    meta: { requiresAuth: false },
+    props: true,
+  },
 
   // ── App (AppLayout) ───────────────────────────────
   {
@@ -79,6 +92,12 @@ const routes: RouteRecordRaw[] = [
         path: 'lucky-draw',
         name: 'LuckyDraw',
         component: () => import('@/views/luckydraw/LuckyDrawView.vue'),
+      },
+      {
+        path: 'groups',
+        name: 'Groups',
+        component: () => import('@/views/groups/GroupsView.vue'),
+        meta: { roles: ['ADMIN', 'HR'] },
       },
       {
         path: 'roles',

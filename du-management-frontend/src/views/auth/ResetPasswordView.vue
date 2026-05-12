@@ -1,34 +1,44 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import InputText from 'primevue/inputtext'
+import { authApi } from '@/api/auth'
 import Password from 'primevue/password'
 import Button from 'primevue/button'
-import { useToast } from 'primevue/usetoast'
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const toast = useToast()
 
-const username = ref('')
-const password = ref('')
+const token = route.params.token as string
+const newPassword = ref('')
+const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
+const success = ref(false)
 
-async function handleLogin() {
+async function handleSubmit() {
   error.value = ''
-  if (!username.value || !password.value) {
-    error.value = 'Please enter both username and password'
+  if (!newPassword.value) {
+    error.value = 'Please enter a new password'
+    return
+  }
+  if (newPassword.value.length < 8) {
+    error.value = 'Password must be at least 8 characters'
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    error.value = 'Passwords do not match'
     return
   }
   loading.value = true
   try {
-    await auth.login({ username: username.value, password: password.value })
-    toast.add({ severity: 'success', summary: 'Welcome back!', detail: `Logged in as ${auth.username}`, life: 3000 })
-    router.push('/')
+    const res = await authApi.resetPassword({ token, newPassword: newPassword.value })
+    auth.setAuth(res.data.accessToken, res.data.username, res.data.role, res.data.userId)
+    success.value = true
+    setTimeout(() => router.push('/'), 1500)
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Invalid credentials. Please try again.'
+    error.value = err.response?.data?.message || 'Invalid or expired reset link. Please request a new one.'
   } finally {
     loading.value = false
   }
@@ -42,36 +52,35 @@ async function handleLogin() {
         <div class="auth-header">
           <div class="auth-logo">
             <div class="auth-logo-icon">
-              <i class="pi pi-th-large"></i>
+              <i class="pi pi-shield"></i>
             </div>
-            <h1>DU Manager</h1>
+            <h1>Set New Password</h1>
           </div>
-          <p class="auth-subtitle">Sign in to your account</p>
+          <p class="auth-subtitle">Choose a new password for your account</p>
         </div>
 
-        <form @submit.prevent="handleLogin" class="auth-form">
+        <form v-if="!success" @submit.prevent="handleSubmit" class="auth-form">
           <div class="form-field">
-            <label for="login-username">Username</label>
-            <InputText
-              id="login-username"
-              v-model="username"
-              placeholder="Enter your username"
+            <label for="reset-password">New Password</label>
+            <Password
+              id="reset-password"
+              v-model="newPassword"
+              placeholder="Enter new password"
               :class="{ 'p-invalid': error }"
-              autocomplete="username"
+              toggleMask
               fluid
             />
           </div>
 
           <div class="form-field">
-            <label for="login-password">Password</label>
+            <label for="reset-confirm">Confirm Password</label>
             <Password
-              id="login-password"
-              v-model="password"
-              placeholder="Enter your password"
+              id="reset-confirm"
+              v-model="confirmPassword"
+              placeholder="Confirm new password"
               :feedback="false"
               :class="{ 'p-invalid': error }"
               toggleMask
-              autocomplete="current-password"
               fluid
             />
           </div>
@@ -83,21 +92,24 @@ async function handleLogin() {
 
           <Button
             type="submit"
-            label="Sign In"
-            icon="pi pi-sign-in"
+            label="Reset Password"
+            icon="pi pi-check"
             :loading="loading"
             class="auth-submit"
             fluid
           />
         </form>
 
-        <div class="auth-footer">
-          <router-link to="/forgot-password" class="auth-link">Forgot password?</router-link>
+        <div v-else class="auth-success">
+          <div class="success-icon">
+            <i class="pi pi-check-circle"></i>
+          </div>
+          <p class="success-title">Password Reset!</p>
+          <p class="success-text">Your password has been updated. Redirecting to dashboard...</p>
         </div>
 
         <div class="auth-footer">
-          <span>Don't have an account?</span>
-          <router-link to="/register" class="auth-link">Create account</router-link>
+          <router-link to="/forgot-password" class="auth-link">Request a new reset link</router-link>
         </div>
       </div>
     </div>
@@ -190,14 +202,35 @@ async function handleLogin() {
   font-size: 15px !important;
 }
 
+.auth-success {
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.success-icon {
+  font-size: 48px;
+  color: var(--theme-green, #22c55e);
+  margin-bottom: var(--space-4);
+}
+
+.success-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.success-text {
+  color: var(--theme-text-weak);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .auth-footer {
   margin-top: var(--space-6);
   text-align: center;
   font-size: 14px;
   color: var(--theme-text-weak);
-  display: flex;
-  gap: var(--space-2);
-  justify-content: center;
 }
 
 .auth-link {

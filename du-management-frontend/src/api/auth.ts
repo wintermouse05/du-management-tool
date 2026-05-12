@@ -1,5 +1,5 @@
 import http from './http'
-import type { LoginRequest, LoginResponse, RegisterRequest } from '@/types'
+import type { ForgotPasswordRequest, LoginRequest, LoginResponse, RegisterRequest, ResetPasswordRequest } from '@/types'
 
 export const authApi = {
   login(data: LoginRequest) {
@@ -12,5 +12,13 @@ export const authApi = {
 
   logout() {
     return http.post<void>('/auth/logout')
+  },
+
+  forgotPassword(data: ForgotPasswordRequest) {
+    return http.post<void>('/auth/forgot-password', data)
+  },
+
+  resetPassword(data: ResetPasswordRequest) {
+    return http.post<LoginResponse>('/auth/reset-password', data)
   },
 }

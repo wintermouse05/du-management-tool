@@ -21,9 +21,9 @@ export const surveysApi = {
     return http.put<SurveyResponse>(`/surveys/${id}`, data)
   },
 
-  assign(surveyId: number, userId: number) {
+  assign(surveyId: number, userId?: number, groupId?: number) {
     return http.post<SurveyProgressResponse>(`/surveys/${surveyId}/assign`, null, {
-      params: { userId },
+      params: { userId, groupId },
     })
   },
 

@@ -70,6 +70,36 @@ export interface LoginResponse {
   userId: number
 }
 
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+export interface ResetPasswordRequest {
+  token: string
+  newPassword: string
+}
+
+export interface GroupRequest {
+  name: string
+  description?: string
+  allGroup: boolean
+}
+
+export interface GroupResponse {
+  id: number
+  name: string
+  description: string | null
+  allGroup: boolean
+  memberCount: number
+}
+
+export interface GroupMemberResponse {
+  id: number
+  username: string
+  fullName: string
+  email: string
+}
+
 export interface RegisterRequest {
   username: string
   email: string

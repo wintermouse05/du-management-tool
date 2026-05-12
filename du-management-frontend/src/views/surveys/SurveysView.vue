@@ -2,26 +2,38 @@
 import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { surveysApi } from '@/api/surveys'
-import type { SurveyResponse, SurveyRequest, SurveyProgressResponse } from '@/types'
+import { membersApi } from '@/api/members'
+import { groupsApi } from '@/api/groups'
+import type { SurveyResponse, SurveyRequest, SurveyProgressResponse, MemberResponse, GroupResponse } from '@/types'
 import { wsService } from '@/services/websocket'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import InputNumber from 'primevue/inputnumber'
 import DatePicker from 'primevue/datepicker'
+import Select from 'primevue/select'
+import SelectButton from 'primevue/selectbutton'
 import ProgressBar from 'primevue/progressbar'
 import { useToast } from 'primevue/usetoast'
 
 const auth = useAuthStore()
 const toast = useToast()
+const assignModeOptions = [
+  { label: 'Individual User', value: 'user' },
+  { label: 'Group', value: 'group' },
+]
 const surveys = ref<SurveyResponse[]>([])
 const total = ref(0); const loading = ref(false); const pg = ref(0); const rows = ref(10)
 const dialogVisible = ref(false); const editing = ref(false); const editId = ref<number|null>(null)
 const form = ref<SurveyRequest>({ title: '', link: '', deadline: '' })
 const formDate = ref<Date|null>(null)
-const assignDialog = ref(false); const assignSurveyId = ref(0); const assignUserId = ref<number>(0)
+const assignDialog = ref(false); const assignSurveyId = ref(0)
+const assignMode = ref<'user' | 'group'>('user')
+const assignUserId = ref<number | null>(null)
+const assignGroupId = ref<number | null>(null)
+const assignUsers = ref<MemberResponse[]>([])
+const assignGroups = ref<GroupResponse[]>([])
 const progressDialog = ref(false); const progress = ref<SurveyProgressResponse|null>(null)
 
 let sub: any = null
@@ -44,8 +56,34 @@ async function save() {
   } catch (err: any) { toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 4000 }) }
 }
 
+async function openAssign(surveyId: number) {
+  assignSurveyId.value = surveyId
+  assignMode.value = 'user'
+  assignUserId.value = null
+  assignGroupId.value = null
+  assignDialog.value = true
+  try {
+    const [usersRes, groupsRes] = await Promise.all([
+      membersApi.search({ size: 1000 }),
+      groupsApi.getAll(),
+    ])
+    assignUsers.value = usersRes.data.content.filter(u => u.status === 'ACTIVE')
+    assignGroups.value = groupsRes.data
+  } catch {}
+}
+
 async function assign() {
-  try { await surveysApi.assign(assignSurveyId.value, assignUserId.value); toast.add({ severity: 'success', summary: 'User assigned', life: 2000 }); assignDialog.value = false
+  try {
+    if (assignMode.value === 'group' && assignGroupId.value) {
+      await surveysApi.assign(assignSurveyId.value, undefined, assignGroupId.value)
+    } else if (assignMode.value === 'user' && assignUserId.value) {
+      await surveysApi.assign(assignSurveyId.value, assignUserId.value)
+    } else {
+      toast.add({ severity: 'warn', summary: 'Please select a user or group', life: 2000 })
+      return
+    }
+    toast.add({ severity: 'success', summary: 'Assigned successfully', life: 2000 })
+    assignDialog.value = false
   } catch (err: any) { toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 3000 }) }
 }
 
@@ -107,7 +145,7 @@ onUnmounted(() => {
             <div style="display:flex;gap:4px;">
               <Button v-if="auth.isMember" icon="pi pi-check" text rounded severity="success" v-tooltip="'Mark completed'" @click="markCompleted(data.id, true)" />
               <Button v-if="auth.isMember" icon="pi pi-times" text rounded severity="secondary" v-tooltip="'Mark incomplete'" @click="markCompleted(data.id, false)" />
-              <Button v-if="auth.isAdminOrHR" icon="pi pi-user-plus" text rounded v-tooltip="'Assign'" @click="assignSurveyId=data.id;assignDialog=true" />
+              <Button v-if="auth.isAdminOrHR" icon="pi pi-user-plus" text rounded v-tooltip="'Assign'" @click="openAssign(data.id)" />
               <Button v-if="auth.isAdminOrHR" icon="pi pi-chart-bar" text rounded v-tooltip="'Progress'" @click="showProgress(data.id)" />
               <Button v-if="auth.isAdminOrHR" icon="pi pi-pencil" text rounded severity="info" @click="openEdit(data)" />
             </div>
@@ -123,8 +161,45 @@ onUnmounted(() => {
       </div>
       <template #footer><Button label="Cancel" text @click="dialogVisible=false" /><Button :label="editing?'Update':'Create'" icon="pi pi-check" @click="save" /></template>
     </Dialog>
-    <Dialog v-model:visible="assignDialog" header="Assign Survey to User" modal :style="{width:'360px'}">
-      <div class="form-field"><label>User ID</label><InputNumber v-model="assignUserId" fluid /></div>
+    <Dialog v-model:visible="assignDialog" header="Assign Survey" modal :style="{width:'480px'}">
+      <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+        <div class="form-field">
+          <label>Assignment Mode</label>
+          <SelectButton v-model="assignMode" :options="assignModeOptions" option-label="label" option-value="value" fluid />
+        </div>
+        <div v-if="assignMode === 'user'" class="form-field">
+          <label>User</label>
+          <Select
+            v-model="assignUserId"
+            :options="assignUsers"
+            option-label="fullName"
+            option-value="id"
+            placeholder="Search and select a user"
+            filter
+            :filter-fields="['username', 'fullName', 'email']"
+            fluid
+          >
+            <template #option="{ option }">
+              <div>{{ option.fullName }} <span style="color:var(--theme-text-weak);font-size:12px;">(@{{ option.username }})</span></div>
+            </template>
+          </Select>
+        </div>
+        <div v-if="assignMode === 'group'" class="form-field">
+          <label>Group</label>
+          <Select
+            v-model="assignGroupId"
+            :options="assignGroups"
+            option-label="name"
+            option-value="id"
+            placeholder="Select a group"
+            fluid
+          >
+            <template #option="{ option }">
+              <div>{{ option.name }} <span style="color:var(--theme-text-weak);font-size:12px;">({{ option.memberCount }} members)</span></div>
+            </template>
+          </Select>
+        </div>
+      </div>
       <template #footer><Button label="Cancel" text @click="assignDialog=false" /><Button label="Assign" icon="pi pi-check" @click="assign" /></template>
     </Dialog>
     <Dialog v-model:visible="progressDialog" header="Survey Progress" modal :style="{width:'400px'}">
