@@ -15,12 +15,16 @@ const theme = useThemeStore()
 const toast = useToast()
 const sidebarOpen = ref(false)
 
-onMounted(() => {
+function connectWebSocketIfAuthenticated() {
   if (auth.token) {
     wsService.connect(auth.token, () => {
       wsService.subscribe('/user/queue/notifications', handleIncomingNotification)
     })
   }
+}
+
+onMounted(() => {
+  connectWebSocketIfAuthenticated()
 })
 
 onUnmounted(() => {
@@ -75,6 +79,14 @@ async function handleLogout() {
 
 // Close sidebar on route change (mobile)
 watch(() => route.path, () => { sidebarOpen.value = false })
+watch(() => auth.token, (newToken, oldToken) => {
+  if (newToken === oldToken) return
+
+  wsService.disconnect()
+  if (newToken) {
+    connectWebSocketIfAuthenticated()
+  }
+})
 
 const roleColor = computed(() => {
   switch (auth.role) {

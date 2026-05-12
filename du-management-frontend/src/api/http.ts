@@ -1,13 +1,84 @@
 import axios from 'axios'
-import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
+import type { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios'
+
+interface RetryableAxiosRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean
+}
+
+interface RefreshResponse {
+  accessToken: string
+  tokenType: string
+  username: string
+  role: string
+  userId: number
+}
 
 const http: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 15000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
+
+let refreshPromise: Promise<string> | null = null
+
+const AUTH_REFRESH_PATH = '/auth/refresh'
+const AUTH_EXCLUDED_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  AUTH_REFRESH_PATH,
+]
+
+function shouldAttemptRefresh(config?: RetryableAxiosRequestConfig): boolean {
+  if (!config?.url) {
+    return false
+  }
+  return !AUTH_EXCLUDED_PATHS.some((path) => config.url?.includes(path))
+}
+
+function applyAuthData(data: RefreshResponse) {
+  localStorage.setItem('token', data.accessToken)
+  localStorage.setItem('username', data.username)
+  localStorage.setItem('role', data.role)
+  localStorage.setItem('userId', String(data.userId))
+
+  window.dispatchEvent(new CustomEvent('du-auth-token-refreshed', { detail: data }))
+}
+
+function clearAuthData() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('username')
+  localStorage.removeItem('role')
+  localStorage.removeItem('userId')
+
+  window.dispatchEvent(new Event('du-auth-cleared'))
+}
+
+async function refreshAccessToken(): Promise<string> {
+  const response = await axios.post<RefreshResponse>(
+    `/api${AUTH_REFRESH_PATH}`,
+    {},
+    {
+      withCredentials: true,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+  )
+
+  applyAuthData(response.data)
+  return response.data.accessToken
+}
+
+function redirectToLoginIfNeeded() {
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login'
+  }
+}
 
 // Request interceptor — attach JWT token
 http.interceptors.request.use(
@@ -18,23 +89,47 @@ http.interceptors.request.use(
     }
     return config
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 )
 
-// Response interceptor — handle 401
+// Response interceptor — refresh on 401, then retry once
 http.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('username')
-      localStorage.removeItem('role')
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
+  async (error: AxiosError) => {
+    const status = error.response?.status
+    const originalRequest = error.config as RetryableAxiosRequestConfig | undefined
+
+    if (status === 401 && originalRequest && !originalRequest._retry && shouldAttemptRefresh(originalRequest)) {
+      originalRequest._retry = true
+
+      try {
+        if (!refreshPromise) {
+          refreshPromise = refreshAccessToken().finally(() => {
+            refreshPromise = null
+          })
+        }
+
+        const newToken = await refreshPromise
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`
+        }
+
+        return http(originalRequest)
+      } catch {
+        clearAuthData()
+        redirectToLoginIfNeeded()
       }
     }
+
+    if (status === 401) {
+      clearAuthData()
+      if (shouldAttemptRefresh(originalRequest)) {
+        redirectToLoginIfNeeded()
+      }
+    }
+
     return Promise.reject(error)
-  }
+  },
 )
 
 export default http

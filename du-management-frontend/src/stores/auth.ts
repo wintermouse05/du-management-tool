@@ -8,6 +8,7 @@ export const useAuthStore = defineStore('auth', () => {
   const username = ref(localStorage.getItem('username') || '')
   const role = ref(localStorage.getItem('role') || '')
   const userId = ref(Number(localStorage.getItem('userId') || '0'))
+  const hasTriedSessionRestore = ref(false)
 
   const isAuthenticated = computed(() => !!token.value)
   const isAdmin = computed(() => role.value === 'ADMIN')
@@ -37,6 +38,22 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('userId')
   }
 
+  function handleTokenRefreshed(event: Event) {
+    const customEvent = event as CustomEvent<{ accessToken: string; username: string; role: string; userId: number }>
+    const detail = customEvent.detail
+    if (!detail) return
+    setAuth(detail.accessToken, detail.username, detail.role, detail.userId)
+  }
+
+  function handleAuthCleared() {
+    clearAuth()
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('du-auth-token-refreshed', handleTokenRefreshed)
+    window.addEventListener('du-auth-cleared', handleAuthCleared)
+  }
+
   async function login(data: LoginRequest) {
     const res = await authApi.login(data)
     setAuth(res.data.accessToken, res.data.username, res.data.role, res.data.userId)
@@ -59,9 +76,29 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function restoreSession() {
+    if (hasTriedSessionRestore.value) {
+      return isAuthenticated.value
+    }
+
+    hasTriedSessionRestore.value = true
+    if (token.value) {
+      return true
+    }
+
+    try {
+      const res = await authApi.refresh()
+      setAuth(res.data.accessToken, res.data.username, res.data.role, res.data.userId)
+      return true
+    } catch {
+      clearAuth()
+      return false
+    }
+  }
+
   return {
     token, username, role, userId,
     isAuthenticated, isAdmin, isHR, isMember, isAdminOrHR,
-    login, register, logout, clearAuth, setAuth,
+    login, register, logout, clearAuth, setAuth, restoreSession,
   }
 })

@@ -10,3 +10,5 @@ declare module '*.css' {
   const content: string
   export default content
 }
+
+declare module 'vue-fortune-wheel'

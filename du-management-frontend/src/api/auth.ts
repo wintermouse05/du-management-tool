@@ -10,6 +10,10 @@ export const authApi = {
     return http.post<LoginResponse>('/auth/register', data)
   },
 
+  refresh() {
+    return http.post<LoginResponse>('/auth/refresh')
+  },
+
   logout() {
     return http.post<void>('/auth/logout')
   },

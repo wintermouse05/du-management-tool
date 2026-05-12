@@ -12,6 +12,7 @@ import './assets/styles/main.css'
 import App from './App.vue'
 import router from './router'
 import { useThemeStore } from './stores/theme'
+import { useAuthStore } from './stores/auth'
 
 const app = createApp(App)
 
@@ -20,6 +21,7 @@ app.use(pinia)
 
 // Bootstrap theme before first render to avoid flash of wrong theme
 useThemeStore(pinia)
+await useAuthStore(pinia).restoreSession()
 
 app.use(router)
 app.use(PrimeVue, {

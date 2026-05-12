@@ -1,6 +1,14 @@
 import { Client, type IMessage } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 
+const getWebSocketUrl = () => {
+  if (import.meta.env.DEV) {
+    return 'http://localhost:8080/ws'
+  }
+
+  return `${window.location.origin}/ws`
+}
+
 class WebSocketService {
   private client: Client | null = null
 
@@ -11,7 +19,7 @@ class WebSocketService {
 
     this.client = new Client({
       // We use SockJS to fallback and handle cross-origin websocket endpoints easier
-      webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      webSocketFactory: () => new SockJS(getWebSocketUrl()),
       connectHeaders: {
         Authorization: `Bearer ${token}`
       },
