@@ -5,7 +5,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,6 +22,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
+    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
     @Override
     protected void doFilterInternal(
@@ -38,21 +42,64 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         jwt = authHeader.substring(7);
         try {
             username = jwtService.extractUsername(jwt);
-        } catch (Exception ex) {
-            filterChain.doFilter(request, response);
+        } catch (ExpiredJwtException ex) {
+            request.setAttribute(
+                    RestAuthenticationEntryPoint.AUTH_ERROR_MESSAGE_ATTR,
+                    "Access token has expired. Please sign in again."
+            );
+            restAuthenticationEntryPoint.commence(
+                    request,
+                    response,
+                    new InsufficientAuthenticationException("JWT has expired", ex)
+            );
+            return;
+        } catch (JwtException | IllegalArgumentException ex) {
+            request.setAttribute(
+                    RestAuthenticationEntryPoint.AUTH_ERROR_MESSAGE_ATTR,
+                    "Access token is invalid. Please sign in again."
+            );
+            restAuthenticationEntryPoint.commence(
+                    request,
+                    response,
+                    new InsufficientAuthenticationException("JWT is invalid", ex)
+            );
             return;
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
+            try {
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                if (jwtService.isTokenValid(jwt, userDetails)) {
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities()
+                    );
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                } else {
+                    request.setAttribute(
+                            RestAuthenticationEntryPoint.AUTH_ERROR_MESSAGE_ATTR,
+                            "Access token is invalid. Please sign in again."
+                    );
+                    restAuthenticationEntryPoint.commence(
+                            request,
+                            response,
+                            new InsufficientAuthenticationException("JWT is invalid")
+                    );
+                    return;
+                }
+            } catch (Exception ex) {
+                request.setAttribute(
+                        RestAuthenticationEntryPoint.AUTH_ERROR_MESSAGE_ATTR,
+                        "Authentication failed. Please sign in again."
                 );
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                restAuthenticationEntryPoint.commence(
+                        request,
+                        response,
+                        new InsufficientAuthenticationException("Authentication failed", ex)
+                );
+                return;
             }
         }
 

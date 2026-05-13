@@ -84,14 +84,30 @@ public class NotificationJobService {
         );
         ensureJob(
                 CRON_SURVEY_REMINDER,
-                "0 0 9 * * *",
+                "0 50 10 * * *",
                 "Remind users before survey deadline",
                 true
         );
     }
 
     private void ensureJob(String code, String schedule, String description, boolean enabled) {
-        if (notificationJobRepository.findByCode(code).isPresent()) {
+        var existingJob = notificationJobRepository.findByCode(code);
+        if (existingJob.isPresent()) {
+            NotificationJob job = existingJob.get();
+            boolean changed = false;
+
+            if (!schedule.equals(job.getSchedule())) {
+                job.setSchedule(schedule);
+                changed = true;
+            }
+            if (!description.equals(job.getDescription())) {
+                job.setDescription(description);
+                changed = true;
+            }
+
+            if (changed) {
+                notificationJobRepository.save(job);
+            }
             return;
         }
         NotificationJob job = new NotificationJob();

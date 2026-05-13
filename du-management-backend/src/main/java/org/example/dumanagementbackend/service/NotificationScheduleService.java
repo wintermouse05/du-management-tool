@@ -1,5 +1,8 @@
 package org.example.dumanagementbackend.service;
 
+import java.time.LocalTime;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 import org.example.dumanagementbackend.entity.NotificationSchedule;
@@ -17,11 +20,17 @@ public class NotificationScheduleService {
 
     private final NotificationScheduleRepository repository;
 
+    @Transactional
     public List<NotificationSchedule> getAll() {
-        return repository.findAll();
+        ensureDefaultSchedules();
+        return repository.findAll().stream()
+                .sorted(Comparator.comparing(NotificationSchedule::getType))
+                .toList();
     }
 
+    @Transactional
     public NotificationSchedule getByType(NotificationScheduleType type) {
+        ensureDefaultSchedules();
         return repository.findByType(type)
                 .orElseThrow(() -> new RuntimeException("Schedule not found for type: " + type));
     }
@@ -43,5 +52,33 @@ public class NotificationScheduleService {
     @Transactional
     public void delete(Long id) {
         repository.deleteById(id);
+    }
+
+    @Transactional
+    public void ensureDefaultSchedules() {
+        Arrays.stream(NotificationScheduleType.values())
+                .forEach(this::ensureScheduleExists);
+    }
+
+    private void ensureScheduleExists(NotificationScheduleType type) {
+        if (repository.findByType(type).isPresent()) {
+            return;
+        }
+
+        NotificationSchedule schedule = new NotificationSchedule();
+        schedule.setType(type);
+        schedule.setSendTime(getDefaultSendTime(type));
+        schedule.setChannelId("");
+        schedule.setEnabled(false);
+        repository.save(schedule);
+    }
+
+    private LocalTime getDefaultSendTime(NotificationScheduleType type) {
+        return switch (type) {
+            case EVENT -> LocalTime.of(8, 0);
+            case BIRTHDAY -> LocalTime.of(9, 5);
+            case ANNIVERSARY -> LocalTime.of(9, 10);
+            case LATE -> LocalTime.of(11, 0);
+        };
     }
 }

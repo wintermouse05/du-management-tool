@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class AuthService {
 
     private final AuthenticationManager authenticationManager;
@@ -32,10 +31,12 @@ public class AuthService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
 
+    @Transactional
     public LoginResponse login(LoginRequest request) {
         return login(request, null, null);
     }
 
+    @Transactional
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.username(), request.password()) 
@@ -89,6 +90,7 @@ public class AuthService {
         return createAuthenticatedSession(saved, httpRequest, httpResponse);
     }
 
+    @Transactional
     public LoginResponse refresh(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         String refreshToken = refreshTokenService.extractRefreshToken(httpRequest);
         RefreshTokenService.RotationResult rotated = refreshTokenService.rotateRefreshToken(refreshToken, httpRequest);
@@ -96,10 +98,12 @@ public class AuthService {
         return buildAccessTokenResponse(rotated.user());
     }
 
+    @Transactional
     public void logout() {
         logout(null, null);
     }
 
+    @Transactional
     public void logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         String refreshToken = refreshTokenService.extractRefreshToken(httpRequest);
         refreshTokenService.revokeByRawToken(refreshToken, "LOGOUT");
