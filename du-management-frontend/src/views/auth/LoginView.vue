@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import InputText from 'primevue/inputtext'
 import Password from 'primevue/password'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
+
+const AUTH_NOTICE_STORAGE_KEY = 'du-auth-notice'
+const POST_LOGIN_REDIRECT_STORAGE_KEY = 'du-post-login-redirect'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -15,6 +18,22 @@ const username = ref('')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
+
+onMounted(() => {
+  const authNotice = sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY)
+  if (!authNotice) {
+    return
+  }
+
+  error.value = authNotice
+  toast.add({
+    severity: 'warn',
+    summary: 'Session ended',
+    detail: authNotice,
+    life: 4000,
+  })
+  sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY)
+})
 
 async function handleLogin() {
   error.value = ''
@@ -26,7 +45,9 @@ async function handleLogin() {
   try {
     await auth.login({ username: username.value, password: password.value })
     toast.add({ severity: 'success', summary: 'Welcome back!', detail: `Logged in as ${auth.username}`, life: 3000 })
-    router.push('/')
+    const postLoginRedirect = sessionStorage.getItem(POST_LOGIN_REDIRECT_STORAGE_KEY) || '/'
+    sessionStorage.removeItem(POST_LOGIN_REDIRECT_STORAGE_KEY)
+    await router.push(postLoginRedirect)
   } catch (err: any) {
     error.value = err.response?.data?.message || 'Invalid credentials. Please try again.'
   } finally {

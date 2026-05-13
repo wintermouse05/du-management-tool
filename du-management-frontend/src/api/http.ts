@@ -25,6 +25,8 @@ const http: AxiosInstance = axios.create({
 let refreshPromise: Promise<string> | null = null
 
 const AUTH_REFRESH_PATH = '/auth/refresh'
+const AUTH_NOTICE_STORAGE_KEY = 'du-auth-notice'
+const POST_LOGIN_REDIRECT_STORAGE_KEY = 'du-post-login-redirect'
 const AUTH_EXCLUDED_PATHS = [
   '/auth/login',
   '/auth/register',
@@ -58,6 +60,11 @@ function clearAuthData() {
   window.dispatchEvent(new Event('du-auth-cleared'))
 }
 
+function getErrorMessage(error: AxiosError): string {
+  const responseData = error.response?.data as { message?: string } | undefined
+  return responseData?.message || 'Your session has expired. Please sign in again.'
+}
+
 async function refreshAccessToken(): Promise<string> {
   const response = await axios.post<RefreshResponse>(
     `/api${AUTH_REFRESH_PATH}`,
@@ -74,7 +81,20 @@ async function refreshAccessToken(): Promise<string> {
   return response.data.accessToken
 }
 
-function redirectToLoginIfNeeded() {
+function rememberPostLoginRedirect() {
+  const { pathname, search, hash } = window.location
+  if (pathname === '/login') {
+    return
+  }
+  sessionStorage.setItem(POST_LOGIN_REDIRECT_STORAGE_KEY, `${pathname}${search}${hash}`)
+}
+
+function redirectToLoginIfNeeded(message?: string) {
+  if (message) {
+    sessionStorage.setItem(AUTH_NOTICE_STORAGE_KEY, message)
+  }
+
+  rememberPostLoginRedirect()
   if (window.location.pathname !== '/login') {
     window.location.href = '/login'
   }
@@ -98,6 +118,7 @@ http.interceptors.response.use(
   async (error: AxiosError) => {
     const status = error.response?.status
     const originalRequest = error.config as RetryableAxiosRequestConfig | undefined
+    const errorMessage = getErrorMessage(error)
 
     if (status === 401 && originalRequest && !originalRequest._retry && shouldAttemptRefresh(originalRequest)) {
       originalRequest._retry = true
@@ -117,14 +138,14 @@ http.interceptors.response.use(
         return http(originalRequest)
       } catch {
         clearAuthData()
-        redirectToLoginIfNeeded()
+        redirectToLoginIfNeeded(errorMessage)
       }
     }
 
     if (status === 401) {
       clearAuthData()
       if (shouldAttemptRefresh(originalRequest)) {
-        redirectToLoginIfNeeded()
+        redirectToLoginIfNeeded(errorMessage)
       }
     }
 
