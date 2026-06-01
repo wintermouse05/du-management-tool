@@ -1,7 +1,6 @@
 package org.example.dumanagementbackend.security;
 
 import org.example.dumanagementbackend.entity.User;
-import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +20,9 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username)
-                .or(() -> userRepository.findByEmail(username))
-                .orElseThrow(() -> new ResourceNotFoundException("User not found for username/email=" + username));
+        User user = userRepository.findByUsernameAndDeletedAtIsNull(username)
+                .or(() -> userRepository.findByEmailAndDeletedAtIsNull(username))
+                .orElseThrow(() -> new UsernameNotFoundException("Invalid username or password"));
 
         String roleName = user.getRole().getName();
         String authority = roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;

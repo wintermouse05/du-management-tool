@@ -23,6 +23,7 @@ public class NotificationTemplateService {
     public static final String TPL_BIRTHDAY_ANNIVERSARY = "TPL_BIRTHDAY_ANNIVERSARY";
     public static final String TPL_EVENT_REMINDER = "TPL_EVENT_REMINDER";
     public static final String TPL_SURVEY_REMINDER = "TPL_SURVEY_REMINDER";
+    public static final String TPL_ORDER_SESSION_CREATOR_REMINDER = "TPL_ORDER_SESSION_CREATOR_REMINDER";
 
     private final NotificationTemplateRepository notificationTemplateRepository;
 
@@ -71,8 +72,8 @@ public class NotificationTemplateService {
         ensureTemplate(
                 TPL_EVENT_REMINDER,
                 "Event Reminder",
-                "Event starts in 1 hour: {eventName}",
-                "Reminder: {eventName} starts at {eventTime} in {location}.\n\n{description}",
+                "Event reminder ({reminderWindow}): {eventName}",
+                "Reminder: {eventName} starts at {eventTime} in {location} ({reminderWindow}).\n\n{description}",
                 true
         );
         ensureTemplate(
@@ -80,6 +81,13 @@ public class NotificationTemplateService {
                 "Survey Reminder",
                 "Survey deadline is approaching: {surveyTitle}",
                 "Please complete survey \"{surveyTitle}\" before {deadline}.",
+                true
+        );
+        ensureTemplate(
+                TPL_ORDER_SESSION_CREATOR_REMINDER,
+                "Order Session Creator Reminder",
+                "Order session deadline in 5 minutes: {sessionName}",
+                "Order session \"{sessionName}\" will reach deadline at {deadline}. Please review before closing.",
                 true
         );
     }

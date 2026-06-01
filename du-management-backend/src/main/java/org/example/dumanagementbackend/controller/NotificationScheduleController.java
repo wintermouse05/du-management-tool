@@ -44,6 +44,18 @@ public class NotificationScheduleController {
         return ResponseEntity.ok(Map.of("status", "ok", "postId", postId != null ? postId : "null"));
     }
 
+    @PostMapping("/late/run")
+    public ResponseEntity<Map<String, Object>> runLatePenaltyNotification() {
+        var result = chatopsNotificationService.sendLatePenaltyNotification();
+        return ResponseEntity.ok(Map.of(
+                "scheduleEnabled", result.scheduleEnabled(),
+                "sent", result.sent(),
+                "unpaidRecordCount", result.unpaidRecordCount(),
+                "unpaidUserCount", result.unpaidUserCount(),
+                "message", result.message()
+        ));
+    }
+
     @GetMapping
     public ResponseEntity<List<NotificationSchedule>> getAll() {
         return ResponseEntity.ok(scheduleService.getAll());

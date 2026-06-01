@@ -15,7 +15,9 @@ import java.time.LocalDate;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
+    private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid username or password";
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
@@ -38,13 +42,17 @@ public class AuthService {
 
     @Transactional
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.username(), request.password()) 
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.username(), request.password())
+            );
+        } catch (AuthenticationException ex) {
+            throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE, ex);
+        }
 
-        User user = userRepository.findByUsername(request.username())
-                .or(() -> userRepository.findByEmail(request.username()))
-                .orElseThrow(() -> new ResourceNotFoundException("User not found for username/email=" + request.username()));
+        User user = userRepository.findByUsernameAndDeletedAtIsNull(request.username())
+                .or(() -> userRepository.findByEmailAndDeletedAtIsNull(request.username()))
+                .orElseThrow(() -> new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE));
 
         return createAuthenticatedSession(user, httpRequest, httpResponse);
     }
@@ -66,13 +74,13 @@ public class AuthService {
             throw new BadRequestException("password is required");
         }
         if (userRepository.existsByUsername(request.username())) {
-            throw new BadRequestException("username already exists: " + request.username());
+            throw new BadRequestException("AUTH_USERNAME_EXISTS", "Username already exists");
         }
         if (userRepository.existsByEmail(request.email())) {
-            throw new BadRequestException("email already exists: " + request.email());
+            throw new BadRequestException("AUTH_EMAIL_EXISTS", "Email already exists");
         }
 
-        Role memberRole = roleRepository.findByName("MEMBER")
+        Role memberRole = roleRepository.findByNameAndDeletedAtIsNull("MEMBER")
                 .orElseThrow(() -> new ResourceNotFoundException("Required role MEMBER is missing"));
 
         User user = new User();

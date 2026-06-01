@@ -1,6 +1,7 @@
 package org.example.dumanagementbackend.controller;
 
 import org.example.dumanagementbackend.dto.survey.SurveyCompletionRequest;
+import org.example.dumanagementbackend.dto.survey.SurveyAssignmentUpdateRequest;
 import org.example.dumanagementbackend.dto.survey.SurveyProgressResponse;
 import org.example.dumanagementbackend.dto.survey.SurveyRequest;
 import org.example.dumanagementbackend.dto.survey.SurveyResponse;
@@ -56,16 +57,21 @@ public class SurveyController {
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<SurveyProgressResponse> assign(
             @PathVariable Long id,
-            @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) Long groupId
+            @RequestParam(required = false) Long userId
     ) {
-        if (groupId != null) {
-            return ResponseEntity.ok(surveyService.assignToGroup(id, groupId));
-        }
         if (userId != null) {
             return ResponseEntity.ok(surveyService.assignToUser(id, userId));
         }
-        throw new BadRequestException("Either userId or groupId is required");
+        throw new BadRequestException("userId is required");
+    }
+
+    @PutMapping("/{id}/assignments")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<SurveyProgressResponse> replaceAssignments(
+            @PathVariable Long id,
+            @RequestBody SurveyAssignmentUpdateRequest request
+    ) {
+        return ResponseEntity.ok(surveyService.replaceAssignments(id, request));
     }
 
     @PostMapping("/{id}/complete")

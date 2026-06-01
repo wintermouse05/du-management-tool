@@ -5,6 +5,7 @@ import org.example.dumanagementbackend.dto.event.EventAttendeeResponse;
 import org.example.dumanagementbackend.dto.event.EventRequest;
 import org.example.dumanagementbackend.dto.event.EventResponse;
 import org.example.dumanagementbackend.service.EventService;
+import java.util.Map;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,7 +31,6 @@ public class EventController {
     private final EventService eventService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<EventResponse> create(@Valid @RequestBody EventRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(eventService.create(request));
     }
@@ -46,7 +46,6 @@ public class EventController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<EventResponse> update(@PathVariable Long id, @Valid @RequestBody EventRequest request) {
         return ResponseEntity.ok(eventService.update(id, request));
     }
@@ -66,5 +65,17 @@ public class EventController {
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<Page<EventAttendeeResponse>> attendees(@PathVariable Long id, Pageable pageable) {
         return ResponseEntity.ok(eventService.getAttendees(id, pageable));
+    }
+
+    @GetMapping("/me/attendances")
+    public ResponseEntity<java.util.List<EventAttendeeResponse>> myAttendances() {
+        return ResponseEntity.ok(eventService.getMyAttendances());
+    }
+
+    @PostMapping("/{id}/notify")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, String>> triggerEventReminder(@PathVariable Long id) {
+        String result = eventService.triggerEventReminder(id);
+        return ResponseEntity.ok(Map.of("message", result));
     }
 }

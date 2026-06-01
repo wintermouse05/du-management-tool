@@ -19,6 +19,7 @@ public class NotificationJobService {
     public static final String CRON_BIRTHDAY_ANNIVERSARY = "CRON_BIRTHDAY_ANNIVERSARY";
     public static final String CRON_EVENT_REMINDER = "CRON_EVENT_REMINDER";
     public static final String CRON_SURVEY_REMINDER = "CRON_SURVEY_REMINDER";
+    public static final String CRON_ORDER_SESSION_CREATOR_REMINDER = "CRON_ORDER_SESSION_CREATOR_REMINDER";
 
     private final NotificationJobRepository notificationJobRepository;
 
@@ -79,13 +80,19 @@ public class NotificationJobService {
         ensureJob(
                 CRON_EVENT_REMINDER,
                 "0 0 * * * *",
-                "Remind one hour before seminar/event",
+                "Remind users 3 days before events and 1 hour before seminars",
                 true
         );
         ensureJob(
                 CRON_SURVEY_REMINDER,
                 "0 50 10 * * *",
                 "Remind users before survey deadline",
+                true
+        );
+        ensureJob(
+                CRON_ORDER_SESSION_CREATOR_REMINDER,
+                "0 * * * * *",
+                "Remind order session creators 5 minutes before deadline",
                 true
         );
     }

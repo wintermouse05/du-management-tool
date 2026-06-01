@@ -85,4 +85,9 @@ public class LuckyDrawController {
     public ResponseEntity<Page<LuckyDrawWinnerResponse>> getWinnersByPrize(@RequestParam Long prizeId, Pageable pageable) {
         return ResponseEntity.ok(luckyDrawService.getWinnersByPrize(prizeId, pageable));
     }
+
+    @GetMapping("/sessions/{sessionId}/winners")
+    public ResponseEntity<List<LuckyDrawWinnerResponse>> getWinnersBySession(@PathVariable Long sessionId) {
+        return ResponseEntity.ok(luckyDrawService.getWinnersBySession(sessionId));
+    }
 }

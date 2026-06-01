@@ -13,5 +13,9 @@ public interface LuckyDrawWinnerRepository extends JpaRepository<LuckyDrawWinner
 
     Page<LuckyDrawWinner> findByPrizeId(Long prizeId, Pageable pageable);
 
+    List<LuckyDrawWinner> findByPrizeSessionId(Long sessionId);
+
+    boolean existsByPrizeSessionIdAndUserId(Long sessionId, Long userId);
+
     long countByPrizeId(Long prizeId);
 }

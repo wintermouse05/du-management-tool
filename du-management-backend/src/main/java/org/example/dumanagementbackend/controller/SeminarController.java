@@ -2,8 +2,10 @@ package org.example.dumanagementbackend.controller;
 
 import org.example.dumanagementbackend.dto.seminar.SeminarRequest;
 import org.example.dumanagementbackend.dto.seminar.SeminarResponse;
+import org.example.dumanagementbackend.dto.seminar.SeminarBulkApproveRequest;
 import org.example.dumanagementbackend.dto.seminar.SeminarVoteRequest;
 import org.example.dumanagementbackend.dto.seminar.SeminarVoteResponse;
+import org.example.dumanagementbackend.dto.seminar.SeminarVoteSummaryResponse;
 import org.example.dumanagementbackend.service.SeminarService;
 import jakarta.validation.Valid;
 import java.io.IOException;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/seminars")
@@ -78,5 +81,20 @@ public class SeminarController {
     @GetMapping("/{id}/votes")
     public ResponseEntity<Page<SeminarVoteResponse>> getVotes(@PathVariable Long id, Pageable pageable) {
         return ResponseEntity.ok(seminarService.getVotes(id, pageable));
+    }
+
+    @GetMapping("/{id}/votes/summary")
+    public ResponseEntity<SeminarVoteSummaryResponse> getVoteSummary(@PathVariable Long id) {
+        return ResponseEntity.ok(seminarService.getVoteSummary(id));
+    }
+
+    @PostMapping("/approve")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<Map<String, Object>> approveSeminars(@Valid @RequestBody SeminarBulkApproveRequest request) {
+        int updated = seminarService.approveSeminars(request.seminarIds());
+        return ResponseEntity.ok(Map.of(
+                "message", "Seminars approved",
+                "updated", updated
+        ));
     }
 }

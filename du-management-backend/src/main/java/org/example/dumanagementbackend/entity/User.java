@@ -1,10 +1,14 @@
 package org.example.dumanagementbackend.entity;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.example.dumanagementbackend.entity.enums.UserStatus;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -15,7 +19,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -31,7 +37,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class User extends AuditableEntity {
+public class User extends SoftDeletableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -58,6 +64,15 @@ public class User extends AuditableEntity {
 
     @Column(name = "join_date")
     private LocalDate joinDate;
+
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+            name = "user_skills",
+            joinColumns = @JoinColumn(name = "user_id"),
+            uniqueConstraints = @UniqueConstraint(name = "uk_user_skills_user_skill", columnNames = {"user_id", "skill"})
+    )
+    @OrderBy("skill ASC")
+    private List<UserSkill> skills = new ArrayList<>();
 
     @Column(name = "total_points", nullable = false)
     private Integer totalPoints = 0;

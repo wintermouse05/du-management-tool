@@ -7,6 +7,8 @@ public record EventResponse(
         String name,
         LocalDateTime eventDate,
         String location,
-        String description
+        String description,
+        String creator,
+        String creatorUsername
 ) {
 }

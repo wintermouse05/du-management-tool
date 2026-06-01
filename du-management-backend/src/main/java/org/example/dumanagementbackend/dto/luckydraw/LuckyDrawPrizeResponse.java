@@ -5,6 +5,7 @@ public record LuckyDrawPrizeResponse(
         Long sessionId,
         String sessionName,
         String prizeName,
-        Integer quantity
+        Integer quantity,
+        long drawnCount
 ) {
 }

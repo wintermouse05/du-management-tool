@@ -28,7 +28,7 @@ public class GroupService {
     private final UserRepository userRepository;
 
     public List<GroupResponse> getAll() {
-        return groupRepository.findAll().stream()
+        return groupRepository.findByDeletedAtIsNullOrderByNameAsc().stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -63,8 +63,11 @@ public class GroupService {
     @Transactional
     public void delete(Long id) {
         UserGroup group = getEntity(id);
-        memberRepository.deleteByGroupId(id);
-        groupRepository.delete(group);
+        if (group.isAllGroup()) {
+            throw new BadRequestException("Cannot archive the All Users group.");
+        }
+        SoftDeleteUtils.markDeleted(group);
+        groupRepository.save(group);
     }
 
     @Transactional
@@ -73,8 +76,11 @@ public class GroupService {
         if (group.isAllGroup()) {
             throw new BadRequestException("Cannot manually add members to an All Users group");
         }
-        User user = userRepository.findById(request.userId())
+        User user = userRepository.findByIdAndDeletedAtIsNull(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
+        if (isAdminAccount(user)) {
+            throw new BadRequestException("Cannot add admin account to member lists");
+        }
 
         if (!memberRepository.existsByGroupIdAndUserId(groupId, request.userId())) {
             GroupMember member = new GroupMember();
@@ -102,10 +108,15 @@ public class GroupService {
     public List<User> getMembers(Long groupId) {
         UserGroup group = getEntity(groupId);
         if (group.isAllGroup()) {
-            return userRepository.findByStatusOrderByTotalPointsDesc(UserStatus.ACTIVE);
+            return userRepository.findByStatusAndUsernameIgnoreCaseNotOrderByTotalPointsDesc(
+                    UserStatus.ACTIVE,
+                    SystemAccountUtils.ADMIN_USERNAME
+            );
         }
         return memberRepository.findByGroupId(groupId).stream()
                 .map(GroupMember::getUser)
+                .filter(user -> !user.isDeleted())
+                .filter(user -> !isAdminAccount(user))
                 .toList();
     }
 
@@ -121,7 +132,7 @@ public class GroupService {
     }
 
     private UserGroup getEntity(Long id) {
-        return groupRepository.findById(id)
+        return groupRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Group not found with id=" + id));
     }
 
@@ -134,10 +145,17 @@ public class GroupService {
     private GroupResponse toResponse(UserGroup group) {
         int count;
         if (group.isAllGroup()) {
-            count = (int) userRepository.countByStatus(UserStatus.ACTIVE);
+            count = (int) userRepository.countByStatusAndUsernameIgnoreCaseNot(
+                    UserStatus.ACTIVE,
+                    SystemAccountUtils.ADMIN_USERNAME
+            );
         } else {
-            count = memberRepository.findByGroupId(group.getId()).size();
+            count = getMembers(group.getId()).size();
         }
         return new GroupResponse(group.getId(), group.getName(), group.getDescription(), group.isAllGroup(), count);
+    }
+
+    private boolean isAdminAccount(User user) {
+        return SystemAccountUtils.isAdminAccount(user);
     }
 }

@@ -26,6 +26,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -82,7 +83,8 @@ class AuthServiceTest {
         when(userRepository.existsByUsername("taken")).thenReturn(true);
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> authService.register(req));
-        assertEquals("username already exists: taken", ex.getMessage());
+        assertEquals("AUTH_USERNAME_EXISTS", ex.getErrorCode());
+        assertEquals("Username already exists", ex.getMessage());
     }
 
     @Test
@@ -92,7 +94,8 @@ class AuthServiceTest {
         when(userRepository.existsByEmail("taken@b.com")).thenReturn(true);
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> authService.register(req));
-        assertEquals("email already exists: taken@b.com", ex.getMessage());
+        assertEquals("AUTH_EMAIL_EXISTS", ex.getErrorCode());
+        assertEquals("Email already exists", ex.getMessage());
     }
 
     @Test
@@ -100,7 +103,7 @@ class AuthServiceTest {
         RegisterRequest req = new RegisterRequest("newuser", "new@b.com", "Full Name", "secret123", null);
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
         when(userRepository.existsByEmail("new@b.com")).thenReturn(false);
-        when(roleRepository.findByName("MEMBER")).thenReturn(Optional.empty());
+        when(roleRepository.findByNameAndDeletedAtIsNull("MEMBER")).thenReturn(Optional.empty());
 
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
                 () -> authService.register(req));
@@ -114,7 +117,7 @@ class AuthServiceTest {
 
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
         when(userRepository.existsByEmail("new@b.com")).thenReturn(false);
-        when(roleRepository.findByName("MEMBER")).thenReturn(Optional.of(role));
+        when(roleRepository.findByNameAndDeletedAtIsNull("MEMBER")).thenReturn(Optional.of(role));
         when(passwordEncoder.encode("secret123")).thenReturn("hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -137,7 +140,7 @@ class AuthServiceTest {
 
         when(userRepository.existsByUsername("alice")).thenReturn(false);
         when(userRepository.existsByEmail("alice@b.com")).thenReturn(false);
-        when(roleRepository.findByName("MEMBER")).thenReturn(Optional.of(role));
+        when(roleRepository.findByNameAndDeletedAtIsNull("MEMBER")).thenReturn(Optional.of(role));
         when(passwordEncoder.encode("password99")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -160,7 +163,7 @@ class AuthServiceTest {
         Role role = buildRole(1L, "MEMBER");
         User user = buildUser(7L, "bob", role);
 
-        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameAndDeletedAtIsNull("bob")).thenReturn(Optional.of(user));
         when(jwtService.generateToken("bob", "MEMBER")).thenReturn("jwt-bob");
 
         LoginResponse response = authService.login(new LoginRequest("bob", "pass"));
@@ -172,12 +175,27 @@ class AuthServiceTest {
     }
 
     @Test
-    void login_throwsNotFoundWhenUserMissing() {
-        when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
-        when(userRepository.findByEmail("ghost")).thenReturn(Optional.empty());
+    void login_throwsBadCredentialsWhenAuthenticationFails() {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
 
-        assertThrows(ResourceNotFoundException.class,
+        BadCredentialsException ex = assertThrows(
+                BadCredentialsException.class,
+                () -> authService.login(new LoginRequest("bob", "wrong"))
+        );
+
+        assertEquals("Invalid username or password", ex.getMessage());
+        verify(userRepository, never()).findByUsername(anyString());
+    }
+
+    @Test
+    void login_throwsBadCredentialsWhenUserMissingAfterAuthentication() {
+        when(userRepository.findByUsernameAndDeletedAtIsNull("ghost")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailAndDeletedAtIsNull("ghost")).thenReturn(Optional.empty());
+
+        BadCredentialsException ex = assertThrows(BadCredentialsException.class,
                 () -> authService.login(new LoginRequest("ghost", "pass")));
+        assertEquals("Invalid username or password", ex.getMessage());
     }
 
     // ── logout ────────────────────────────────────────────────────────────────

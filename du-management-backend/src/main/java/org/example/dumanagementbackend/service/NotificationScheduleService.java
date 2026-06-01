@@ -4,6 +4,7 @@ import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 import org.example.dumanagementbackend.entity.NotificationSchedule;
 import org.example.dumanagementbackend.entity.enums.NotificationScheduleType;
@@ -43,8 +44,14 @@ public class NotificationScheduleService {
                     ns.setType(type);
                     return ns;
                 });
+        String existingChannelId = normalizeChannelId(schedule.getChannelId());
+        String incomingChannelId = normalizeChannelId(input.getChannelId());
+        if (!Objects.equals(existingChannelId, incomingChannelId)) {
+            // Existing root post ID may belong to another channel; force a new thread root.
+            schedule.setChatopsPostId(null);
+        }
         schedule.setSendTime(input.getSendTime());
-        schedule.setChannelId(input.getChannelId());
+        schedule.setChannelId(incomingChannelId);
         schedule.setEnabled(input.isEnabled());
         return repository.save(schedule);
     }
@@ -69,8 +76,16 @@ public class NotificationScheduleService {
         schedule.setType(type);
         schedule.setSendTime(getDefaultSendTime(type));
         schedule.setChannelId("");
-        schedule.setEnabled(false);
+        schedule.setEnabled(type == NotificationScheduleType.LEADERBOARD);
         repository.save(schedule);
+    }
+
+    private String normalizeChannelId(String channelId) {
+        if (channelId == null) {
+            return null;
+        }
+        String trimmed = channelId.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private LocalTime getDefaultSendTime(NotificationScheduleType type) {
@@ -79,6 +94,7 @@ public class NotificationScheduleService {
             case BIRTHDAY -> LocalTime.of(9, 5);
             case ANNIVERSARY -> LocalTime.of(9, 10);
             case LATE -> LocalTime.of(11, 0);
+            case LEADERBOARD -> LocalTime.of(16, 0);
         };
     }
 }

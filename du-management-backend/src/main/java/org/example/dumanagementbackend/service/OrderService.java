@@ -8,8 +8,10 @@ import org.example.dumanagementbackend.dto.order.OrderSessionResponse;
 import org.example.dumanagementbackend.dto.order.OrderSessionSummaryResponse;
 import org.example.dumanagementbackend.dto.order.RestaurantRequest;
 import org.example.dumanagementbackend.dto.order.RestaurantResponse;
+import org.example.dumanagementbackend.dto.order.UserOrderBulkRequest;
 import org.example.dumanagementbackend.dto.order.UserOrderRequest;
 import org.example.dumanagementbackend.dto.order.UserOrderResponse;
+import org.example.dumanagementbackend.dto.order.UserOrderUpdateRequest;
 import org.example.dumanagementbackend.entity.MenuItem;
 import org.example.dumanagementbackend.entity.OrderSession;
 import org.example.dumanagementbackend.entity.Restaurant;
@@ -24,25 +26,38 @@ import org.example.dumanagementbackend.repository.RestaurantRepository;
 import org.example.dumanagementbackend.repository.UserOrderRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @Transactional(readOnly = true)
 public class OrderService {
 
@@ -53,6 +68,10 @@ public class OrderService {
     private final RestaurantRepository restaurantRepository;
     private final MenuScraperService menuScraperService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final OrderSessionClosureService orderSessionClosureService;
+
+    @Autowired(required = false)
+    private ChatopsNotificationService chatopsNotificationService;
 
     // ==================== Restaurant ====================
 
@@ -64,7 +83,7 @@ public class OrderService {
         restaurant = restaurantRepository.save(restaurant);
 
         // Scrape and persist initial menu items
-        List<MenuScrapeItemResponse> scraped = menuScraperService.scrape(request.scrapeUrl());
+        List<MenuScrapeItemResponse> scraped = menuScraperService.scrape(request.scrapeUrl()).items();
         for (MenuScrapeItemResponse item : scraped) {
             MenuItem menuItem = new MenuItem();
             menuItem.setRestaurant(restaurant);
@@ -78,83 +97,38 @@ public class OrderService {
     }
 
     public List<RestaurantResponse> getRestaurants() {
-        return restaurantRepository.findAll().stream()
+        return restaurantRepository.findByDeletedAtIsNull().stream()
                 .map(this::toRestaurantResponse)
                 .toList();
     }
 
     @Transactional
     public void deleteRestaurant(Long id) {
-        Restaurant restaurant = restaurantRepository.findById(id)
+        Restaurant restaurant = restaurantRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found with id=" + id));
 
-        List<MenuItem> items = menuItemRepository.findByRestaurantId(id);
-        for (MenuItem item : items) {
-            if (userOrderRepository.existsByItemId(item.getId())) {
-                throw new BadRequestException("Cannot delete restaurant because some menu items have existing orders.");
-            }
+        if (orderSessionRepository.existsByRestaurant_IdAndStatus(id, OrderSessionStatus.OPEN)) {
+            throw new BadRequestException("Cannot archive restaurant while it has open order sessions.");
         }
 
-        menuItemRepository.deleteByRestaurantId(id);
-        restaurantRepository.delete(restaurant);
+        List<MenuItem> items = menuItemRepository.findByRestaurantIdAndDeletedAtIsNull(id);
+        items.forEach(SoftDeleteUtils::markDeleted);
+        menuItemRepository.saveAll(items);
+        SoftDeleteUtils.markDeleted(restaurant);
+        restaurantRepository.save(restaurant);
     }
 
-    /**
-     * Re-scrapes the restaurant's URL and syncs menu items:
-     * - Existing items matched by name: update price/description
-     * - New items: insert
-     * - Removed items (no longer in scrape result): delete if not referenced by orders
-     */
     @Transactional
     public List<MenuItemResponse> getMenuByRestaurant(Long restaurantId) {
-        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+        restaurantRepository.findByIdAndDeletedAtIsNull(restaurantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found with id=" + restaurantId));
-
-        List<MenuScrapeItemResponse> scraped = menuScraperService.scrape(restaurant.getScrapeUrl());
-
-        // Index existing items by name for upsert
-        List<MenuItem> existingItems = menuItemRepository.findByRestaurantId(restaurantId);
-        Map<String, MenuItem> existingByName = existingItems.stream()
-                .collect(Collectors.toMap(MenuItem::getName, Function.identity(), (a, b) -> a));
-
-        Set<String> scrapedNames = new HashSet<>();
-        List<MenuItem> finalItems = new ArrayList<>();
-
-        // Upsert: update existing or insert new
-        for (MenuScrapeItemResponse scrapeItem : scraped) {
-            scrapedNames.add(scrapeItem.name());
-            MenuItem existing = existingByName.get(scrapeItem.name());
-            if (existing != null) {
-                existing.setPrice(parsePrice(scrapeItem.price()));
-                existing.setDescription(scrapeItem.description());
-                finalItems.add(menuItemRepository.save(existing));
-            } else {
-                MenuItem newItem = new MenuItem();
-                newItem.setRestaurant(restaurant);
-                newItem.setName(scrapeItem.name());
-                newItem.setPrice(parsePrice(scrapeItem.price()));
-                newItem.setDescription(scrapeItem.description());
-                finalItems.add(menuItemRepository.save(newItem));
-            }
-        }
-
-        // Remove items no longer in the scraped list (only if not referenced by orders)
-        for (MenuItem existing : existingItems) {
-            if (!scrapedNames.contains(existing.getName())) {
-                if (!userOrderRepository.existsByItemId(existing.getId())) {
-                    menuItemRepository.delete(existing);
-                }
-                // If referenced by orders, keep it (won't appear in finalItems though)
-            }
-        }
-
-        return finalItems.stream().map(this::toMenuItemResponse).toList();
+        return getMenuItemsByRestaurant(restaurantId);
     }
 
     // ==================== Menu Items (read-only for ordering) ====================
 
     public List<MenuItemResponse> getMenuItemsByRestaurant(Long restaurantId) {
-        return menuItemRepository.findByRestaurantId(restaurantId).stream()
+        return menuItemRepository.findByRestaurantIdAndDeletedAtIsNull(restaurantId).stream()
                 .map(this::toMenuItemResponse)
                 .toList();
     }
@@ -163,16 +137,31 @@ public class OrderService {
 
     @Transactional
     public OrderSessionResponse createSession(OrderSessionRequest request) {
+        Restaurant restaurant = restaurantRepository.findByIdAndDeletedAtIsNull(request.restaurantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Restaurant not found with id=" + request.restaurantId()));
+
         OrderSession session = new OrderSession();
         session.setStatus(request.status() != null ? request.status() : OrderSessionStatus.OPEN);
+        session.setName(request.name().trim());
+        session.setRestaurant(restaurant);
         session.setDeadline(request.deadline());
-        OrderSessionResponse response = toSessionResponse(orderSessionRepository.save(session));
+        OrderSession saved = orderSessionRepository.save(session);
+        OrderSessionResponse response = toSessionResponse(saved, resolveUserDisplayNames(singletonUsername(saved.getCreatedBy())));
+        triggerOrderSessionCreatedNotification(saved);
         messagingTemplate.convertAndSend("/topic/orders", "SESSION_CREATED");
         return response;
     }
 
     public Page<OrderSessionResponse> getSessions(Pageable pageable) {
-        return orderSessionRepository.findAll(pageable).map(this::toSessionResponse);
+        Pageable resolvedPageable = withDefaultSort(pageable, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        Page<OrderSession> page = orderSessionRepository.findAll(resolvedPageable);
+        Map<String, String> displayNames = resolveUserDisplayNames(page.getContent().stream()
+                .map(OrderSession::getCreatedBy)
+                .collect(Collectors.toSet()));
+        List<OrderSessionResponse> content = page.getContent().stream()
+                .map(session -> toSessionResponse(session, displayNames))
+                .toList();
+        return new PageImpl<>(content, resolvedPageable, page.getTotalElements());
     }
 
     @Cacheable(cacheNames = "orderSessionSummary", key = "#sessionId")
@@ -217,13 +206,33 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderSessionResponse updateSessionStatus(Long id, OrderSessionStatus status) {
+    public OrderSessionResponse updateSessionStatus(Long id, OrderSessionStatus status, LocalDateTime deadline) {
         OrderSession session = orderSessionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order session not found with id=" + id));
+        ensureCanManageSession(session);
+        validateAndApplyReopenDeadline(session, status, deadline);
         session.setStatus(status);
-        OrderSessionResponse response = toSessionResponse(orderSessionRepository.save(session));
+        OrderSession saved = orderSessionRepository.save(session);
+        OrderSessionResponse response = toSessionResponse(saved, resolveUserDisplayNames(singletonUsername(saved.getCreatedBy())));
         messagingTemplate.convertAndSend("/topic/orders", "SESSION_UPDATED");
         return response;
+    }
+
+    @Transactional
+    public int closeExpiredOpenSessions(LocalDateTime now) {
+        LocalDateTime cutoff = now != null ? now : LocalDateTime.now();
+        List<OrderSession> expiredSessions = orderSessionRepository.findByStatusAndDeadlineLessThanEqual(
+                OrderSessionStatus.OPEN,
+                cutoff
+        );
+        if (expiredSessions.isEmpty()) {
+            return 0;
+        }
+
+        expiredSessions.forEach(session -> session.setStatus(OrderSessionStatus.CLOSED));
+        orderSessionRepository.saveAll(expiredSessions);
+        messagingTemplate.convertAndSend("/topic/orders", "SESSION_UPDATED");
+        return expiredSessions.size();
     }
 
     // ==================== User Orders ====================
@@ -231,33 +240,98 @@ public class OrderService {
     @Transactional
     @CacheEvict(cacheNames = "orderSessionSummary", key = "#request.sessionId")
     public UserOrderResponse placeOrder(UserOrderRequest request) {
-        OrderSession session = orderSessionRepository.findById(request.sessionId())
-                .orElseThrow(() -> new ResourceNotFoundException("Order session not found with id=" + request.sessionId()));
-                
-        if (session.getStatus() != OrderSessionStatus.OPEN) {
-            throw new BadRequestException("Cannot place order because this session is not open.");
-        }
-        
-        User user = userRepository.findById(request.userId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
-        MenuItem item = menuItemRepository.findById(request.itemId())
-                .orElseThrow(() -> new ResourceNotFoundException("Menu item not found with id=" + request.itemId()));
-
-        UserOrder order = new UserOrder();
-        order.setSession(session);
-        order.setUser(user);
-        order.setItem(item);
-        order.setQuantity(request.quantity());
-        order.setNote(request.note());
-        order.setPaid(Boolean.TRUE.equals(request.paid()));
-        
-        UserOrderResponse response = toUserOrderResponse(userOrderRepository.save(order));
+        OrderSession session = requireOpenSession(request.sessionId());
+        MenuItem item = requireMenuItemForSession(request.itemId(), session);
+        User user = requireUser(request.userId());
+        ensureUserHasNoOrder(session.getId(), user.getId());
+        UserOrder saved = userOrderRepository.save(buildOrderEntity(session, user, item, request.quantity(), request.note()));
+        UserOrderResponse response = toUserOrderResponse(saved, resolveUserDisplayNames(singletonUsername(saved.getCreatedBy())));
         messagingTemplate.convertAndSend("/topic/orders", "ORDER_PLACED");
         return response;
     }
 
+    @Transactional
+    @CacheEvict(cacheNames = "orderSessionSummary", key = "#request.sessionId")
+    public List<UserOrderResponse> placeOrdersForUsers(UserOrderBulkRequest request) {
+        OrderSession session = requireOpenSession(request.sessionId());
+        MenuItem item = requireMenuItemForSession(request.itemId(), session);
+
+        List<Long> uniqueUserIds = request.userIds().stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (uniqueUserIds.isEmpty()) {
+            throw new BadRequestException("userIds must contain valid user ids");
+        }
+
+        List<User> users = userRepository.findAllById(uniqueUserIds);
+        if (users.size() != uniqueUserIds.size()) {
+            throw new BadRequestException("Some userIds do not exist");
+        }
+        Map<Long, User> userById = users.stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+        ensureUsersHaveNoOrders(session.getId(), uniqueUserIds);
+
+        List<UserOrder> savedOrders = new ArrayList<>();
+        for (Long userId : uniqueUserIds) {
+            User user = userById.get(userId);
+            UserOrder saved = userOrderRepository.save(
+                    buildOrderEntity(session, user, item, request.quantity(), request.note())
+            );
+            savedOrders.add(saved);
+        }
+
+        Map<String, String> displayNames = resolveUserDisplayNames(savedOrders.stream()
+                .map(UserOrder::getCreatedBy)
+                .collect(Collectors.toSet()));
+        List<UserOrderResponse> responses = savedOrders.stream()
+                .map(order -> toUserOrderResponse(order, displayNames))
+                .toList();
+
+        messagingTemplate.convertAndSend("/topic/orders", "ORDER_PLACED");
+        return responses;
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = "orderSessionSummary", key = "#result.sessionId", condition = "#result != null")
+    public UserOrderResponse updateOrder(Long orderId, UserOrderUpdateRequest request) {
+        UserOrder order = requireOrder(orderId);
+        ensureCanManageOrder(order);
+        ensureOrderSessionOpen(order);
+        MenuItem item = requireMenuItemForSession(request.itemId(), order.getSession());
+
+        order.setItem(item);
+        order.setQuantity(request.quantity());
+        order.setNote(request.note());
+        UserOrder saved = userOrderRepository.save(order);
+        UserOrderResponse response = toUserOrderResponse(saved, resolveUserDisplayNames(singletonUsername(saved.getCreatedBy())));
+        messagingTemplate.convertAndSend("/topic/orders", "ORDER_UPDATED");
+        return response;
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = "orderSessionSummary", key = "#result", condition = "#result != null")
+    public Long cancelOrder(Long orderId) {
+        UserOrder order = requireOrder(orderId);
+        ensureCanManageOrder(order);
+        ensureOrderSessionOpen(order);
+        Long sessionId = order.getSession().getId();
+
+        userOrderRepository.delete(order);
+        messagingTemplate.convertAndSend("/topic/orders", "ORDER_CANCELLED");
+        return sessionId;
+    }
+
     public Page<UserOrderResponse> getOrdersBySession(Long sessionId, Pageable pageable) {
-        return userOrderRepository.findBySessionId(sessionId, pageable).map(this::toUserOrderResponse);
+        Pageable resolvedPageable = withDefaultSort(pageable, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        Page<UserOrder> page = userOrderRepository.findBySessionId(sessionId, resolvedPageable);
+        Map<String, String> displayNames = resolveUserDisplayNames(page.getContent().stream()
+                .map(UserOrder::getCreatedBy)
+                .collect(Collectors.toSet()));
+        List<UserOrderResponse> content = page.getContent().stream()
+                .map(order -> toUserOrderResponse(order, displayNames))
+                .toList();
+        return new PageImpl<>(content, resolvedPageable, page.getTotalElements());
     }
 
     @Transactional
@@ -265,8 +339,10 @@ public class OrderService {
     public UserOrderResponse markPaid(Long orderId, boolean paid) {
         UserOrder order = userOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id=" + orderId));
+        ensureAdminCanManagePaidStatus();
         order.setPaid(paid);
-        UserOrderResponse response = toUserOrderResponse(userOrderRepository.save(order));
+        UserOrder saved = userOrderRepository.save(order);
+        UserOrderResponse response = toUserOrderResponse(saved, resolveUserDisplayNames(singletonUsername(saved.getCreatedBy())));
         messagingTemplate.convertAndSend("/topic/orders", "ORDER_UPDATED");
         return response;
     }
@@ -277,9 +353,15 @@ public class OrderService {
         if (priceStr == null || priceStr.isBlank()) {
             return BigDecimal.ZERO;
         }
-        String cleaned = priceStr.replaceAll("[^0-9.]", "");
+        String cleaned = priceStr.replaceAll("[^0-9.,]", "");
         if (cleaned.isEmpty()) {
             return BigDecimal.ZERO;
+        }
+        // Vietnamese format: dot as thousands separator (e.g. "20.000" = 20000)
+        if (cleaned.matches("\\d{1,3}(\\.\\d{3})+")) {
+            cleaned = cleaned.replace(".", "");
+        } else if (cleaned.matches("\\d{1,3}(,\\d{3})+")) {
+            cleaned = cleaned.replace(",", "");
         }
         try {
             return new BigDecimal(cleaned);
@@ -302,22 +384,299 @@ public class OrderService {
         );
     }
 
-    private OrderSessionResponse toSessionResponse(OrderSession session) {
-        return new OrderSessionResponse(session.getId(), session.getStatus(), session.getDeadline());
+    private OrderSessionResponse toSessionResponse(OrderSession session, Map<String, String> displayNames) {
+        String creatorUsername = session.getCreatedBy();
+        return new OrderSessionResponse(
+                session.getId(),
+                sessionName(session),
+                session.getStatus(),
+                session.getDeadline(),
+                session.getRestaurant() != null ? session.getRestaurant().getId() : null,
+                session.getRestaurant() != null ? session.getRestaurant().getName() : null,
+                displayNames.getOrDefault(creatorUsername, fallbackDisplayName(creatorUsername)),
+                creatorUsername,
+                canManageSession(session),
+                session.getCreatedAt()
+        );
     }
 
-    private UserOrderResponse toUserOrderResponse(UserOrder order) {
+    private UserOrderResponse toUserOrderResponse(UserOrder order, Map<String, String> displayNames) {
+        String orderedByUsername = order.getCreatedBy();
+        String orderedByFullName = null;
+        if (orderedByUsername != null
+                && order.getUser() != null
+                && order.getUser().getUsername() != null
+                && !orderedByUsername.equalsIgnoreCase(order.getUser().getUsername())) {
+            orderedByFullName = displayNames.getOrDefault(orderedByUsername, fallbackDisplayName(orderedByUsername));
+        }
+
         return new UserOrderResponse(
                 order.getId(),
                 order.getSession().getId(),
+                sessionName(order.getSession()),
+                order.getSession().getStatus(),
                 order.getUser().getId(),
                 order.getUser().getFullName(),
+                orderedByFullName,
                 order.getItem().getId(),
                 order.getItem().getName(),
+                order.getItem().getPrice(),
                 order.getQuantity(),
                 order.getNote(),
-                order.isPaid()
+                order.isPaid(),
+                canManageOrder(order)
         );
+    }
+
+    private Pageable withDefaultSort(Pageable pageable, Sort defaultSort) {
+        if (pageable == null) {
+            return PageRequest.of(0, 20, defaultSort);
+        }
+        if (pageable.isUnpaged()) {
+            return pageable;
+        }
+
+        Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
+        return resolvedPageable.getSort().isSorted()
+                ? resolvedPageable
+                : PageRequest.of(resolvedPageable.getPageNumber(), resolvedPageable.getPageSize(), defaultSort);
+    }
+
+    private Map<String, String> resolveUserDisplayNames(Set<String> usernames) {
+        Set<String> cleanedUsernames = usernames.stream()
+                .filter(username -> username != null && !username.isBlank() && !"system".equalsIgnoreCase(username))
+                .collect(Collectors.toSet());
+        if (cleanedUsernames.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, String> result = new HashMap<>();
+        userRepository.findByUsernameIn(cleanedUsernames)
+                .forEach(user -> result.put(user.getUsername(), user.getFullName()));
+        return result;
+    }
+
+    private Set<String> singletonUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return Set.of();
+        }
+        return Set.of(username);
+    }
+
+    private boolean canManageSession(OrderSession session) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        boolean elevated = authentication.getAuthorities().stream().anyMatch(authority ->
+                "ROLE_ADMIN".equals(authority.getAuthority()) || "ROLE_HR".equals(authority.getAuthority()));
+        if (elevated) {
+            return true;
+        }
+        return session != null
+                && session.getCreatedBy() != null
+                && session.getCreatedBy().equalsIgnoreCase(authentication.getName());
+    }
+
+    private void ensureCanManageSession(OrderSession session) {
+        if (!canManageSession(session)) {
+            throw new AccessDeniedException("You do not have permission to manage this order session.");
+        }
+    }
+
+    private boolean canManageOrder(UserOrder order) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        if (isCurrentUserAdmin()) {
+            return true;
+        }
+
+        String username = authentication.getName();
+        String orderedForUsername = order != null && order.getUser() != null ? order.getUser().getUsername() : null;
+        String orderedByUsername = order != null ? order.getCreatedBy() : null;
+        return username != null
+                && ((orderedForUsername != null && username.equalsIgnoreCase(orderedForUsername))
+                || (orderedByUsername != null && username.equalsIgnoreCase(orderedByUsername)));
+    }
+
+    private void ensureCanManageOrder(UserOrder order) {
+        if (!canManageOrder(order)) {
+            throw new AccessDeniedException("You do not have permission to manage this order.");
+        }
+    }
+
+    private boolean isCurrentUserAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getAuthorities().stream().anyMatch(authority ->
+                "ROLE_ADMIN".equals(authority.getAuthority()));
+    }
+
+    private void ensureAdminCanManagePaidStatus() {
+        if (!isCurrentUserAdmin()) {
+            throw new AccessDeniedException("Only admins can update paid status.");
+        }
+    }
+
+    private String sessionName(OrderSession session) {
+        if (session.getName() != null && !session.getName().isBlank()) {
+            return session.getName();
+        }
+        return "Session #" + session.getId();
+    }
+
+    private String fallbackDisplayName(String username) {
+        if (username == null || username.isBlank()) {
+            return "Unknown";
+        }
+        return username;
+    }
+
+    private OrderSession requireOpenSession(Long sessionId) {
+        OrderSession session = orderSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order session not found with id=" + sessionId));
+        if (session.getStatus() == OrderSessionStatus.OPEN && isPastDeadline(session, LocalDateTime.now())) {
+            orderSessionClosureService.closeExpiredOpenSession(session.getId());
+            throw new BadRequestException(
+                    "ORDER_SESSION_PAST_DEADLINE",
+                    "Session is past deadline. This session has been automatically closed."
+            );
+        }
+        if (session.getStatus() != OrderSessionStatus.OPEN) {
+            throw new BadRequestException("Cannot place order because this session is not open.");
+        }
+        return session;
+    }
+
+    private MenuItem requireMenuItemForSession(Long itemId, OrderSession session) {
+        MenuItem item = menuItemRepository.findById(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Menu item not found with id=" + itemId));
+
+        if (session.getRestaurant() != null
+                && item.getRestaurant() != null
+                && !session.getRestaurant().getId().equals(item.getRestaurant().getId())) {
+            throw new BadRequestException("Selected menu item does not belong to this order session.");
+        }
+        return item;
+    }
+
+    private User requireUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + userId));
+    }
+
+    private UserOrder requireOrder(Long orderId) {
+        return userOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id=" + orderId));
+    }
+
+    private void ensureUserHasNoOrder(Long sessionId, Long userId) {
+        if (userOrderRepository.existsBySessionIdAndUserId(sessionId, userId)) {
+            throw new BadRequestException("Each user can only have one order in this session.");
+        }
+    }
+
+    private void ensureUsersHaveNoOrders(Long sessionId, List<Long> userIds) {
+        List<UserOrder> existingOrders = userOrderRepository.findBySessionIdAndUserIdIn(sessionId, userIds);
+        if (!existingOrders.isEmpty()) {
+            throw new BadRequestException("Each user can only have one order in this session.");
+        }
+    }
+
+    private void ensureOrderSessionOpen(UserOrder order) {
+        OrderSession session = order.getSession();
+        if (session.getStatus() == OrderSessionStatus.OPEN && isPastDeadline(session, LocalDateTime.now())) {
+            orderSessionClosureService.closeExpiredOpenSession(session.getId());
+            throw new BadRequestException(
+                    "ORDER_SESSION_PAST_DEADLINE",
+                    "Session is past deadline. This session has been automatically closed."
+            );
+        }
+        if (session.getStatus() != OrderSessionStatus.OPEN) {
+            throw new BadRequestException("Cannot change order because this session is not open.");
+        }
+    }
+
+    private UserOrder buildOrderEntity(OrderSession session, User user, MenuItem item, Integer quantity, String note) {
+        UserOrder order = new UserOrder();
+        order.setSession(session);
+        order.setUser(user);
+        order.setItem(item);
+        order.setQuantity(quantity);
+        order.setNote(note);
+        // Paid status is managed only via markPaid (admin-only path).
+        order.setPaid(false);
+        return order;
+    }
+
+    private void validateAndApplyReopenDeadline(OrderSession session, OrderSessionStatus status, LocalDateTime proposedDeadline) {
+        if (status != OrderSessionStatus.OPEN) {
+            if (proposedDeadline != null) {
+                throw new BadRequestException("deadline can only be updated when reopening a session.");
+            }
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (proposedDeadline != null && !proposedDeadline.isAfter(now)) {
+            throw new BadRequestException("New deadline must be in the future.");
+        }
+
+        boolean expired = session.getDeadline() != null && !session.getDeadline().isAfter(now);
+        if (expired && proposedDeadline == null) {
+            throw new BadRequestException("Session is past deadline. Please provide a new deadline to reopen.");
+        }
+
+        if (proposedDeadline != null) {
+            session.setDeadline(proposedDeadline);
+            session.setDeadlineReminderSentAt(null);
+        }
+    }
+
+    private boolean isPastDeadline(OrderSession session, LocalDateTime now) {
+        return session.getDeadline() != null && !session.getDeadline().isAfter(now);
+    }
+
+    private void triggerOrderSessionCreatedNotification(OrderSession session) {
+        ChatopsNotificationService notifier = chatopsNotificationService;
+        if (notifier == null || session == null) {
+            return;
+        }
+
+        Long sessionId = session.getId();
+        String name = sessionName(session);
+        String restaurantName = session.getRestaurant() != null ? session.getRestaurant().getName() : null;
+        LocalDateTime deadline = session.getDeadline();
+        OrderSessionStatus status = session.getStatus();
+        dispatchAfterCommit(
+                "Order session created ChatOps notification",
+                () -> notifier.sendOrderSessionCreatedNotification(sessionId, name, restaurantName, deadline, status)
+        );
+    }
+
+    private void dispatchAfterCommit(String taskName, Runnable task) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    CompletableFuture.runAsync(() -> runBestEffort(taskName, task));
+                }
+            });
+            return;
+        }
+
+        runBestEffort(taskName, task);
+    }
+
+    private void runBestEffort(String taskName, Runnable task) {
+        try {
+            task.run();
+        } catch (Exception ex) {
+            log.warn("{} failed: {}", taskName, ex.getMessage());
+        }
     }
 
     private static class SummaryAccumulator {

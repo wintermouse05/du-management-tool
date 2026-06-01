@@ -2,6 +2,8 @@ package org.example.dumanagementbackend.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -10,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import org.example.dumanagementbackend.entity.enums.LateRecordStatus;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -37,4 +40,11 @@ public class LateRecord extends AuditableEntity {
 
     @Column(length = 255)
     private String reason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private LateRecordStatus status = LateRecordStatus.FIRST_TIME;
+
+    @Column(name = "fine_amount")
+    private Integer fineAmount = 0;
 }

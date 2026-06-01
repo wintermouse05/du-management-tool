@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
+import { getApiErrorDetail } from '@/utils/apiError'
 import Password from 'primevue/password'
 import Button from 'primevue/button'
 
@@ -38,7 +39,7 @@ async function handleSubmit() {
     success.value = true
     setTimeout(() => router.push('/'), 1500)
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Invalid or expired reset link. Please request a new one.'
+    error.value = getApiErrorDetail(err, 'Invalid or expired reset link. Please request a new one.')
   } finally {
     loading.value = false
   }
@@ -250,3 +251,5 @@ async function handleSubmit() {
   .auth-header { margin-bottom: var(--space-6); }
 }
 </style>
+
+

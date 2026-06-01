@@ -2,11 +2,13 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { getApiErrorDetail } from '@/utils/apiError'
 import InputText from 'primevue/inputtext'
 import Password from 'primevue/password'
 import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
+import { toLocalDate } from '@/utils/datetime'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -24,13 +26,13 @@ async function handleRegister() {
   try {
     const payload = {
       ...form.value,
-      dob: form.value.dob ? form.value.dob.toISOString().split('T')[0] : null
+      dob: form.value.dob ? toLocalDate(form.value.dob) : null
     }
     await auth.register(payload)
     toast.add({ severity: 'success', summary: 'Account created!', life: 3000 })
     router.push('/')
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Registration failed.'
+    error.value = getApiErrorDetail(err, 'Registration failed.')
   } finally { loading.value = false }
 }
 </script>
@@ -93,3 +95,5 @@ async function handleRegister() {
 .auth-footer { margin-top: var(--space-6); text-align: center; font-size: 14px; color: var(--theme-text-weak); display: flex; gap: var(--space-2); justify-content: center; }
 .auth-link { color: var(--theme-blue); font-weight: 600; }
 </style>
+
+

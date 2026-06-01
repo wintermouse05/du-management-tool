@@ -46,5 +46,8 @@ public class Seminar extends AuditableEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private SeminarStatus status = SeminarStatus.PROPOSED;
+    private SeminarStatus status = SeminarStatus.PENDING;
+
+    @Column(name = "chatops_thread_id", length = 100)
+    private String chatopsThreadId;
 }

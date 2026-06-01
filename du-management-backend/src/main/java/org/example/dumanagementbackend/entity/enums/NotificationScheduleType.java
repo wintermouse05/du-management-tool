@@ -4,5 +4,6 @@ public enum NotificationScheduleType {
     LATE,
     EVENT,
     BIRTHDAY,
-    ANNIVERSARY
+    ANNIVERSARY,
+    LEADERBOARD
 }

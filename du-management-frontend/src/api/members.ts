@@ -22,6 +22,10 @@ export const membersApi = {
     return http.put<MemberResponse>(`/members/${id}/deactivate`)
   },
 
+  delete(id: number) {
+    return http.delete<void>(`/members/${id}`)
+  },
+
   search(params?: Pageable & { q?: string; status?: string }) {
     return http.get<Page<MemberResponse>>('/members/search', { params })
   },

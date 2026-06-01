@@ -3,6 +3,7 @@ package org.example.dumanagementbackend.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,8 +12,10 @@ import java.util.Optional;
 import org.example.dumanagementbackend.dto.system.RoleRequest;
 import org.example.dumanagementbackend.dto.system.RoleResponse;
 import org.example.dumanagementbackend.entity.Role;
+import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.RoleRepository;
+import org.example.dumanagementbackend.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,6 +31,9 @@ class RoleServiceTest {
 
     @Mock
     private RoleRepository roleRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private RoleService roleService;
@@ -57,7 +63,7 @@ class RoleServiceTest {
         Role r2 = buildRole(2L, "MEMBER", "Regular member");
         Page<Role> page = new PageImpl<>(List.of(r1, r2), pageable, 2);
 
-        when(roleRepository.findAll(pageable)).thenReturn(page);
+        when(roleRepository.findByDeletedAtIsNull(pageable)).thenReturn(page);
 
         Page<RoleResponse> result = roleService.getAll(pageable);
 
@@ -70,7 +76,7 @@ class RoleServiceTest {
 
     @Test
     void getById_throwsNotFoundWhenRoleMissing() {
-        when(roleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(roleRepository.findByIdAndDeletedAtIsNull(99L)).thenReturn(Optional.empty());
 
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
                 () -> roleService.getById(99L));
@@ -80,7 +86,7 @@ class RoleServiceTest {
     @Test
     void getById_returnsRoleWhenFound() {
         Role role = buildRole(3L, "HR", "Human Resources");
-        when(roleRepository.findById(3L)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndDeletedAtIsNull(3L)).thenReturn(Optional.of(role));
 
         RoleResponse response = roleService.getById(3L);
 
@@ -93,7 +99,7 @@ class RoleServiceTest {
 
     @Test
     void update_throwsNotFoundWhenRoleMissing() {
-        when(roleRepository.findById(88L)).thenReturn(Optional.empty());
+        when(roleRepository.findByIdAndDeletedAtIsNull(88L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class,
                 () -> roleService.update(88L, new RoleRequest("NEW", "desc")));
@@ -102,7 +108,7 @@ class RoleServiceTest {
     @Test
     void update_updatesAndReturnsResponse() {
         Role role = buildRole(2L, "OLD", "Old description");
-        when(roleRepository.findById(2L)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndDeletedAtIsNull(2L)).thenReturn(Optional.of(role));
         when(roleRepository.save(any(Role.class))).thenAnswer(inv -> inv.getArgument(0));
 
         RoleResponse response = roleService.update(2L, new RoleRequest("UPDATED", "New description"));
@@ -115,19 +121,45 @@ class RoleServiceTest {
 
     @Test
     void delete_throwsNotFoundWhenRoleMissing() {
-        when(roleRepository.findById(77L)).thenReturn(Optional.empty());
+        when(roleRepository.findByIdAndDeletedAtIsNull(77L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> roleService.delete(77L));
     }
 
     @Test
-    void delete_deletesRole() {
+    void delete_archivesCustomRole() {
         Role role = buildRole(4L, "TEMP", "Temporary role");
-        when(roleRepository.findById(4L)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndDeletedAtIsNull(4L)).thenReturn(Optional.of(role));
+        when(userRepository.existsByRoleIdAndDeletedAtIsNull(4L)).thenReturn(false);
 
         roleService.delete(4L);
 
-        verify(roleRepository).delete(role);
+        assertEquals(true, role.isDeleted());
+        verify(roleRepository).save(role);
+        verify(roleRepository, never()).delete(role);
+    }
+
+    @Test
+    void delete_rejectsSeededRole() {
+        Role role = buildRole(1L, "ADMIN", "System administrator");
+        when(roleRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(role));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> roleService.delete(1L));
+
+        assertEquals("ROLE_SYSTEM_ROLE_ARCHIVE_FORBIDDEN", ex.getErrorCode());
+        verify(roleRepository, never()).save(any(Role.class));
+    }
+
+    @Test
+    void delete_rejectsRoleAssignedToActiveUsers() {
+        Role role = buildRole(4L, "TEMP", "Temporary role");
+        when(roleRepository.findByIdAndDeletedAtIsNull(4L)).thenReturn(Optional.of(role));
+        when(userRepository.existsByRoleIdAndDeletedAtIsNull(4L)).thenReturn(true);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> roleService.delete(4L));
+
+        assertEquals("Cannot archive role because active users are assigned to it.", ex.getMessage());
+        verify(roleRepository, never()).save(any(Role.class));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

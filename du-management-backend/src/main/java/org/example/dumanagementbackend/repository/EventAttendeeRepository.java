@@ -13,4 +13,6 @@ public interface EventAttendeeRepository extends JpaRepository<EventAttendee, Ev
     List<EventAttendee> findByEventId(Long eventId);
 
     Page<EventAttendee> findByEventId(Long eventId, Pageable pageable);
+
+    List<EventAttendee> findByIdUserId(Long userId);
 }

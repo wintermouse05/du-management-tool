@@ -9,7 +9,11 @@ public interface UserGroupRepository extends JpaRepository<UserGroup, Long> {
 
     Optional<UserGroup> findByName(String name);
 
+    Optional<UserGroup> findByIdAndDeletedAtIsNull(Long id);
+
     boolean existsByName(String name);
+
+    List<UserGroup> findByDeletedAtIsNullOrderByNameAsc();
 
     List<UserGroup> findByAllGroupTrue();
 }

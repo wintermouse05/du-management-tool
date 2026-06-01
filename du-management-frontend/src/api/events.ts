@@ -34,4 +34,12 @@ export const eventsApi = {
   getAttendees(eventId: number, params?: Pageable) {
     return http.get<Page<EventAttendeeResponse>>(`/events/${eventId}/attendees`, { params })
   },
+
+  getMyAttendances() {
+    return http.get<EventAttendeeResponse[]>('/events/me/attendances')
+  },
+
+  triggerReminder(eventId: number) {
+    return http.post<{ message: string }>(`/events/${eventId}/notify`)
+  },
 }

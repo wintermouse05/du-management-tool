@@ -5,6 +5,10 @@ import Button from 'primevue/button'
 import { notificationsApi } from '@/api/notifications'
 import type { NotificationInboxResponse } from '@/types'
 
+const props = withDefaults(defineProps<{ inline?: boolean }>(), {
+  inline: false,
+})
+
 const router = useRouter()
 const rootEl = ref<HTMLElement | null>(null)
 const panelOpen = ref(false)
@@ -138,7 +142,7 @@ function onRealtimeNotification(event: Event) {
 </script>
 
 <template>
-  <div ref="rootEl" class="notification-bell">
+  <div ref="rootEl" class="notification-bell" :class="{ 'notification-bell-inline': props.inline }">
     <Button icon="pi pi-bell" rounded outlined aria-label="Notifications" @click="togglePanel" />
     <span v-if="unreadCount > 0" class="notification-badge">{{ unreadBadgeText }}</span>
 
@@ -192,6 +196,17 @@ function onRealtimeNotification(event: Event) {
   top: 16px;
   right: 20px;
   z-index: 120;
+}
+
+.notification-bell.notification-bell-inline {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: 1;
+}
+
+.notification-bell.notification-bell-inline .notification-panel {
+  right: 0;
 }
 
 .notification-badge {
@@ -296,14 +311,18 @@ function onRealtimeNotification(event: Event) {
 }
 
 @media (max-width: 1024px) {
-  .notification-bell {
+  .notification-bell:not(.notification-bell-inline) {
     top: 8px;
-    right: 62px;
+    right: 106px;
   }
 
   .notification-panel {
     width: min(360px, calc(100vw - 16px));
-    right: -46px;
+    right: -90px;
+  }
+
+  .notification-bell.notification-bell-inline .notification-panel {
+    right: 0;
   }
 }
 </style>

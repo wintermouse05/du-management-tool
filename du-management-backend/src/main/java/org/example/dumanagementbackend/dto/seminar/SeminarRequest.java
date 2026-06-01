@@ -2,6 +2,7 @@ package org.example.dumanagementbackend.dto.seminar;
 
 import org.example.dumanagementbackend.entity.enums.SeminarStatus;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 
@@ -15,6 +16,7 @@ public record SeminarRequest(
         @Size(max = 4000, message = "description must be at most 4000 characters")
         String description,
 
+        @NotNull(message = "scheduledAt is required")
         LocalDateTime scheduledAt,
 
         SeminarStatus status

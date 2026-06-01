@@ -58,8 +58,8 @@ class SeminarServiceTest {
     @Test
     void create_returnsSeminarResponse() {
         SeminarRequest req = new SeminarRequest(null, "Clean Code Talk", "Best practices",
-                LocalDateTime.now().plusDays(7), SeminarStatus.PROPOSED);
-        Seminar saved = buildSeminar(1L, "Clean Code Talk", null, SeminarStatus.PROPOSED);
+                LocalDateTime.now().plusDays(7), SeminarStatus.PENDING);
+        Seminar saved = buildSeminar(1L, "Clean Code Talk", null, SeminarStatus.PENDING);
 
         when(seminarRepository.save(any(Seminar.class))).thenReturn(saved);
 
@@ -67,7 +67,7 @@ class SeminarServiceTest {
 
         assertEquals(1L, response.id());
         assertEquals("Clean Code Talk", response.title());
-        assertEquals(SeminarStatus.PROPOSED, response.status());
+        assertEquals(SeminarStatus.PENDING, response.status());
     }
 
     // ── getAll ───────────────────────────────────────────────────────────────
@@ -75,11 +75,11 @@ class SeminarServiceTest {
     @Test
     void getAll_returnsMappedPage() {
         Pageable pageable = PageRequest.of(0, 5);
-        Seminar s1 = buildSeminar(1L, "DDD Talk", null, SeminarStatus.PROPOSED);
-        Seminar s2 = buildSeminar(2L, "TDD Talk", null, SeminarStatus.SCHEDULED);
+        Seminar s1 = buildSeminar(1L, "DDD Talk", null, SeminarStatus.PENDING);
+        Seminar s2 = buildSeminar(2L, "TDD Talk", null, SeminarStatus.APPROVED);
         Page<Seminar> page = new PageImpl<>(List.of(s1, s2), pageable, 2);
 
-        when(seminarRepository.findAll(pageable)).thenReturn(page);
+        when(seminarRepository.findAllOrdered(pageable)).thenReturn(page);
 
         Page<SeminarResponse> result = seminarService.getAll(pageable);
 
@@ -102,7 +102,7 @@ class SeminarServiceTest {
     @Test
     void update_grantsPointsToSpeakerWhenStatusChangesToDone() {
         User speaker = buildUser(10L, "Speaker Sam");
-        Seminar existing = buildSeminar(5L, "ML Talk", speaker, SeminarStatus.SCHEDULED);
+        Seminar existing = buildSeminar(5L, "ML Talk", speaker, SeminarStatus.APPROVED);
 
         SeminarRequest req = new SeminarRequest(10L, "ML Talk", "Machine Learning overview",
                 LocalDateTime.now().plusDays(1), SeminarStatus.DONE);
@@ -135,7 +135,7 @@ class SeminarServiceTest {
 
     @Test
     void update_doesNotGrantPointsWhenNoSpeaker() {
-        Seminar existing = buildSeminar(6L, "No Speaker Talk", null, SeminarStatus.SCHEDULED);
+        Seminar existing = buildSeminar(6L, "No Speaker Talk", null, SeminarStatus.APPROVED);
 
         SeminarRequest req = new SeminarRequest(null, "No Speaker Talk", null,
                 LocalDateTime.now().plusDays(1), SeminarStatus.DONE);
@@ -159,20 +159,33 @@ class SeminarServiceTest {
     }
 
     @Test
-    void vote_throwsBadRequestWhenSeminarNotProposed() {
-        Seminar seminar = buildSeminar(4L, "Scheduled Talk", null, SeminarStatus.SCHEDULED);
+    void vote_allowsVotingForDoneSeminar() {
+        Seminar seminar = buildSeminar(4L, "Completed Talk", null, SeminarStatus.DONE);
+        User user = buildUser(1L, "Voter");
+
+        SeminarVoteId voteId = new SeminarVoteId();
+        voteId.setSeminarId(4L);
+        voteId.setUserId(1L);
+
         when(seminarRepository.findById(4L)).thenReturn(Optional.of(seminar));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(seminarVoteRepository.findById(any(SeminarVoteId.class))).thenReturn(Optional.empty());
+        when(seminarVoteRepository.save(any(SeminarVote.class))).thenAnswer(inv -> {
+            SeminarVote v = inv.getArgument(0);
+            v.setId(voteId);
+            v.setSeminar(seminar);
+            v.setUser(user);
+            return v;
+        });
 
         SeminarVoteRequest req = new SeminarVoteRequest(1L, VoteType.UPVOTE);
-
-        BadRequestException ex = assertThrows(BadRequestException.class,
-                () -> seminarService.vote(4L, req));
-        assertEquals("Cannot vote on a seminar that is already SCHEDULED", ex.getMessage());
+        SeminarVoteResponse response = seminarService.vote(4L, req);
+        assertEquals(VoteType.UPVOTE, response.voteType());
     }
 
     @Test
     void vote_throwsNotFoundWhenUserMissing() {
-        Seminar seminar = buildSeminar(4L, "Open Talk", null, SeminarStatus.PROPOSED);
+        Seminar seminar = buildSeminar(4L, "Open Talk", null, SeminarStatus.PENDING);
         when(seminarRepository.findById(4L)).thenReturn(Optional.of(seminar));
         when(userRepository.findById(55L)).thenReturn(Optional.empty());
 
@@ -182,7 +195,7 @@ class SeminarServiceTest {
 
     @Test
     void vote_savesVoteAndReturnsResponse() {
-        Seminar seminar = buildSeminar(4L, "Open Talk", null, SeminarStatus.PROPOSED);
+        Seminar seminar = buildSeminar(4L, "Open Talk", null, SeminarStatus.PENDING);
         User user = buildUser(9L, "Voter");
 
         SeminarVoteId voteId = new SeminarVoteId();
@@ -210,7 +223,7 @@ class SeminarServiceTest {
 
     @Test
     void vote_updatesExistingVote() {
-        Seminar seminar = buildSeminar(4L, "Open Talk", null, SeminarStatus.PROPOSED);
+        Seminar seminar = buildSeminar(4L, "Open Talk", null, SeminarStatus.PENDING);
         User user = buildUser(9L, "Voter");
 
         SeminarVoteId voteId = new SeminarVoteId();
@@ -254,11 +267,26 @@ class SeminarServiceTest {
                 () -> seminarService.uploadMaterials(1L, null));
     }
 
+    @Test
+    void uploadMaterials_throwsBadRequestWhenSeminarAlreadyOccurred() {
+        org.springframework.web.multipart.MultipartFile file =
+                org.mockito.Mockito.mock(org.springframework.web.multipart.MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+
+        Seminar occurredSeminar = buildSeminar(8L, "Past Seminar", null, SeminarStatus.APPROVED);
+        occurredSeminar.setScheduledAt(LocalDateTime.now().minusMinutes(1));
+        when(seminarRepository.findById(8L)).thenReturn(Optional.of(occurredSeminar));
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> seminarService.uploadMaterials(8L, file));
+        assertEquals("Cannot upload materials for a seminar that has already occurred.", ex.getMessage());
+    }
+
     // ── downloadMaterials ─────────────────────────────────────────────────────
 
     @Test
     void downloadMaterials_throwsNotFoundWhenNoMaterialsUrl() {
-        Seminar seminar = buildSeminar(2L, "No Materials", null, SeminarStatus.PROPOSED);
+        Seminar seminar = buildSeminar(2L, "No Materials", null, SeminarStatus.PENDING);
         seminar.setMaterialsUrl(null);
         when(seminarRepository.findById(2L)).thenReturn(Optional.of(seminar));
 

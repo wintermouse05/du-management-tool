@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,9 +16,12 @@ import java.util.List;
 import java.util.Optional;
 import org.example.dumanagementbackend.dto.member.MemberRequest;
 import org.example.dumanagementbackend.dto.member.MemberResponse;
+import org.example.dumanagementbackend.dto.member.MemberSkillRequest;
 import org.example.dumanagementbackend.entity.Role;
 import org.example.dumanagementbackend.entity.User;
+import org.example.dumanagementbackend.entity.enums.MemberSkillType;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
+import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.RoleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
@@ -41,6 +48,9 @@ class MemberServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     @InjectMocks
     private MemberService memberService;
 
@@ -50,7 +60,7 @@ class MemberServiceTest {
     void create_throwsNotFoundWhenRoleMissing() {
         MemberRequest req = new MemberRequest(99L, "user1", "user@b.com", "pass1234",
                 "Full Name", null, null, UserStatus.ACTIVE);
-        when(roleRepository.findById(99L)).thenReturn(Optional.empty());
+        when(roleRepository.findByIdAndDeletedAtIsNull(99L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> memberService.create(req));
     }
@@ -61,7 +71,7 @@ class MemberServiceTest {
         MemberRequest req = new MemberRequest(1L, "newuser", "new@b.com", "password1",
                 "New User", null, LocalDate.now(), UserStatus.ACTIVE);
 
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(role));
         when(passwordEncoder.encode("password1")).thenReturn("hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -83,7 +93,7 @@ class MemberServiceTest {
         MemberRequest req = new MemberRequest(1L, "user2", "u2@b.com", null,
                 "User Two", null, null, UserStatus.ACTIVE);
 
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(role));
         when(passwordEncoder.encode("ChangeMe@123")).thenReturn("default-hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -96,6 +106,43 @@ class MemberServiceTest {
         verify(passwordEncoder).encode("ChangeMe@123");
     }
 
+    @Test
+    void create_mapsMemberSkills() {
+        Role role = buildRole(1L, "MEMBER");
+        MemberRequest req = new MemberRequest(1L, "skilled", "skilled@b.com", "password1",
+                "Skilled User", null, null, UserStatus.ACTIVE, List.of(
+                new MemberSkillRequest(MemberSkillType.BACKEND_DEVELOPER, 4),
+                new MemberSkillRequest(MemberSkillType.QA_ENGINEER, 2)
+        ));
+
+        when(roleRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(role));
+        when(passwordEncoder.encode("password1")).thenReturn("hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId(7L);
+            return u;
+        });
+
+        MemberResponse response = memberService.create(req);
+
+        assertEquals(2, response.skills().size());
+        assertEquals(MemberSkillType.BACKEND_DEVELOPER, response.skills().get(0).skill());
+        assertEquals(4, response.skills().get(0).level());
+    }
+
+    @Test
+    void create_throwsBadRequestWhenEmailAlreadyExists() {
+        MemberRequest req = new MemberRequest(1L, "newuser", "existing@b.com", "password1",
+                "New User", null, null, UserStatus.ACTIVE);
+        when(userRepository.existsByUsername("newuser")).thenReturn(false);
+        when(userRepository.existsByEmail("existing@b.com")).thenReturn(true);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> memberService.create(req));
+
+        assertEquals("AUTH_EMAIL_EXISTS", ex.getErrorCode());
+        assertEquals("Email already exists.", ex.getMessage());
+    }
+
     // ── getAll ───────────────────────────────────────────────────────────────
 
     @Test
@@ -106,19 +153,45 @@ class MemberServiceTest {
         Pageable pageable = PageRequest.of(0, 5);
         Page<User> page = new PageImpl<>(List.of(u1, u2), pageable, 2);
 
-        when(userRepository.findAll(pageable)).thenReturn(page);
+        when(userRepository.searchMembers(eq("%"), eq(UserStatus.ACTIVE), eq(false), any(Pageable.class))).thenReturn(page);
 
-        Page<MemberResponse> result = memberService.getAll(pageable);
+        Page<MemberResponse> result = memberService.getAll(pageable, false, false);
 
         assertEquals(2, result.getTotalElements());
         assertEquals("alice", result.getContent().get(0).username());
+        verify(userRepository).searchMembers(eq("%"), eq(UserStatus.ACTIVE), eq(false), any(Pageable.class));
+    }
+
+    @Test
+    void getAll_doesNotForceActiveStatusForAdminRole() {
+        Role role = buildRole(1L, "MEMBER");
+        User u1 = buildUser(1L, "alice", role);
+        Pageable pageable = PageRequest.of(0, 5);
+        Page<User> page = new PageImpl<>(List.of(u1), pageable, 1);
+
+        when(userRepository.searchMembers(eq("%"), isNull(), eq(false), any(Pageable.class))).thenReturn(page);
+
+        Page<MemberResponse> result = memberService.getAll(pageable, false, true);
+
+        assertEquals(1, result.getTotalElements());
+        verify(userRepository).searchMembers(eq("%"), isNull(), eq(false), any(Pageable.class));
+    }
+
+    @Test
+    void search_returnsEmptyPageWhenNonAdminRequestsInactiveMembers() {
+        Pageable pageable = PageRequest.of(0, 5);
+
+        Page<MemberResponse> result = memberService.search(null, UserStatus.INACTIVE, pageable, false, false);
+
+        assertEquals(0, result.getTotalElements());
+        verify(userRepository, never()).searchMembers(any(), any(), anyBoolean(), any(Pageable.class));
     }
 
     // ── getById ──────────────────────────────────────────────────────────────
 
     @Test
     void getById_throwsNotFoundWhenUserMissing() {
-        when(userRepository.findById(77L)).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndDeletedAtIsNull(77L)).thenReturn(Optional.empty());
         ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
                 () -> memberService.getById(77L));
         assertEquals("User not found with id=77", ex.getMessage());
@@ -128,7 +201,7 @@ class MemberServiceTest {
     void getById_returnsMemberResponse() {
         Role role = buildRole(1L, "MEMBER");
         User user = buildUser(3L, "carol", role);
-        when(userRepository.findById(3L)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndDeletedAtIsNull(3L)).thenReturn(Optional.of(user));
 
         MemberResponse response = memberService.getById(3L);
         assertEquals(3L, response.id());
@@ -144,14 +217,31 @@ class MemberServiceTest {
         MemberRequest req = new MemberRequest(1L, "newname", "new@b.com", null,
                 "New Full Name", null, null, UserStatus.ACTIVE);
 
-        when(userRepository.findById(4L)).thenReturn(Optional.of(existing));
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
+        when(userRepository.findByIdAndDeletedAtIsNull(4L)).thenReturn(Optional.of(existing));
+        when(roleRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(role));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MemberResponse response = memberService.update(4L, req);
 
         assertEquals("newname", response.username());
         assertEquals("New Full Name", response.fullName());
+    }
+
+    @Test
+    void update_throwsBadRequestWhenEmailAlreadyExistsOnAnotherUser() {
+        Role role = buildRole(1L, "MEMBER");
+        User existing = buildUser(4L, "oldname", role);
+        MemberRequest req = new MemberRequest(1L, "newname", "existing@b.com", null,
+                "New Full Name", null, null, UserStatus.ACTIVE);
+
+        when(userRepository.findByIdAndDeletedAtIsNull(4L)).thenReturn(Optional.of(existing));
+        when(userRepository.existsByUsernameAndIdNot("newname", 4L)).thenReturn(false);
+        when(userRepository.existsByEmailAndIdNot("existing@b.com", 4L)).thenReturn(true);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> memberService.update(4L, req));
+
+        assertEquals("AUTH_EMAIL_EXISTS", ex.getErrorCode());
+        assertEquals("Email already exists.", ex.getMessage());
     }
 
     // ── deactivate ────────────────────────────────────────────────────────────
@@ -162,7 +252,7 @@ class MemberServiceTest {
         User user = buildUser(5L, "activemember", role);
         user.setStatus(UserStatus.ACTIVE);
 
-        when(userRepository.findById(5L)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndDeletedAtIsNull(5L)).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MemberResponse response = memberService.deactivate(5L);
@@ -172,8 +262,42 @@ class MemberServiceTest {
 
     @Test
     void deactivate_throwsNotFoundWhenUserMissing() {
-        when(userRepository.findById(55L)).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndDeletedAtIsNull(55L)).thenReturn(Optional.empty());
         assertThrows(ResourceNotFoundException.class, () -> memberService.deactivate(55L));
+    }
+
+    // ── delete ───────────────────────────────────────────────────────────────
+
+    @Test
+    void delete_archivesMemberAndRevokesRefreshTokens() {
+        Role role = buildRole(1L, "MEMBER");
+        User user = buildUser(6L, "deleteuser", role);
+
+        when(userRepository.findByIdAndDeletedAtIsNull(6L)).thenReturn(Optional.of(user));
+
+        memberService.delete(6L);
+
+        assertEquals(UserStatus.INACTIVE, user.getStatus());
+        assertTrue(user.isDeleted());
+        verify(userRepository).save(user);
+        verify(refreshTokenService).revokeActiveByUserId(6L, "USER_ARCHIVED");
+        verify(userRepository, never()).delete(any(User.class));
+    }
+
+    @Test
+    void delete_throwsBadRequestForSystemAdminAccount() {
+        Role role = buildRole(1L, "ADMIN");
+        User user = buildUser(1L, "admin", role);
+
+        when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> memberService.delete(1L));
+
+        assertEquals("MEMBER_SYSTEM_ACCOUNT_ARCHIVE_FORBIDDEN", ex.getErrorCode());
+        assertEquals("The system admin account cannot be archived.", ex.getMessage());
+        verify(userRepository, never()).delete(any(User.class));
+        verify(userRepository, never()).save(any(User.class));
+        verify(refreshTokenService, never()).revokeActiveByUserId(any(), any());
     }
 
     // ── exportCsv ─────────────────────────────────────────────────────────────
@@ -188,16 +312,25 @@ class MemberServiceTest {
         user.setStatus(UserStatus.ACTIVE);
         user.setTotalPoints(100);
 
-        when(userRepository.searchMembersForExport(any(), any())).thenReturn(List.of(user));
+        when(userRepository.searchMembersForExport(any(), eq(UserStatus.ACTIVE), anyBoolean())).thenReturn(List.of(user));
 
-        byte[] csv = memberService.exportCsv(null, null);
+        byte[] csv = memberService.exportCsv(null, null, false, false);
         String content = new String(csv, java.nio.charset.StandardCharsets.UTF_8);
 
-        assertTrue(content.startsWith("id,username,email,fullName,role,status,joinDate,tenureMonths,totalPoints\n"));
+        assertTrue(content.startsWith("id,username,email,fullName,role,status,joinDate,tenureMonths,totalPoints,skills\n"));
         assertTrue(content.contains("exportuser"));
         assertTrue(content.contains("export@test.com"));
         assertTrue(content.contains("MEMBER"));
         assertTrue(content.contains("100"));
+    }
+
+    @Test
+    void exportCsv_returnsOnlyHeaderWhenNonAdminRequestsInactiveMembers() {
+        byte[] csv = memberService.exportCsv(null, UserStatus.INACTIVE, false, false);
+        String content = new String(csv, java.nio.charset.StandardCharsets.UTF_8);
+
+        assertEquals("id,username,email,fullName,role,status,joinDate,tenureMonths,totalPoints,skills\n", content);
+        verify(userRepository, never()).searchMembersForExport(any(), any(), anyBoolean());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

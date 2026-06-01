@@ -1,7 +1,7 @@
 import http from './http'
 import type {
   SeminarRequest, SeminarResponse, SeminarVoteRequest,
-  SeminarVoteResponse, Page, Pageable
+  SeminarVoteResponse, SeminarVoteSummaryResponse, Page, Pageable
 } from '@/types'
 
 export const seminarsApi = {
@@ -25,7 +25,10 @@ export const seminarsApi = {
     const formData = new FormData()
     formData.append('file', file)
     return http.post<SeminarResponse>(`/seminars/${id}/materials`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      timeout: 60000,
     })
   },
 
@@ -41,5 +44,13 @@ export const seminarsApi = {
 
   getVotes(seminarId: number, params?: Pageable) {
     return http.get<Page<SeminarVoteResponse>>(`/seminars/${seminarId}/votes`, { params })
+  },
+
+  getVoteSummary(seminarId: number) {
+    return http.get<SeminarVoteSummaryResponse>(`/seminars/${seminarId}/votes/summary`)
+  },
+
+  approveMany(seminarIds: number[]) {
+    return http.post<{ message: string; updated: number }>('/seminars/approve', { seminarIds })
   },
 }

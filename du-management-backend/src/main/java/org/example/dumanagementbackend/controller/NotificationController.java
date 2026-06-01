@@ -3,6 +3,8 @@ package org.example.dumanagementbackend.controller;
 import java.util.List;
 import java.util.Map;
 
+import org.example.dumanagementbackend.dto.chatops.ChatopsChannelConfigResponse;
+import org.example.dumanagementbackend.dto.chatops.ChatopsChannelConfigUpsertRequest;
 import org.example.dumanagementbackend.dto.notification.NotificationChannelRequest;
 import org.example.dumanagementbackend.dto.notification.NotificationChannelResponse;
 import org.example.dumanagementbackend.dto.notification.NotificationInboxResponse;
@@ -11,8 +13,11 @@ import org.example.dumanagementbackend.dto.notification.NotificationJobToggleReq
 import org.example.dumanagementbackend.dto.notification.NotificationTemplateRequest;
 import org.example.dumanagementbackend.dto.notification.NotificationTemplateResponse;
 import org.example.dumanagementbackend.dto.notification.NotificationUnreadCountResponse;
+import org.example.dumanagementbackend.entity.enums.ChatopsChannelPurpose;
 import org.example.dumanagementbackend.service.NotificationChannelService;
+import org.example.dumanagementbackend.service.ChatopsChannelConfigService;
 import org.example.dumanagementbackend.service.NotificationJobService;
+import org.example.dumanagementbackend.service.NotificationManualTriggerService;
 import org.example.dumanagementbackend.service.NotificationService;
 import org.example.dumanagementbackend.service.NotificationTemplateService;
 import org.springframework.data.domain.Page;
@@ -40,8 +45,10 @@ public class NotificationController {
 
     private final NotificationService notificationService;
     private final NotificationJobService notificationJobService;
+    private final NotificationManualTriggerService notificationManualTriggerService;
     private final NotificationTemplateService notificationTemplateService;
     private final NotificationChannelService notificationChannelService;
+    private final ChatopsChannelConfigService chatopsChannelConfigService;
 
     @GetMapping("/jobs")
     @PreAuthorize("hasRole('ADMIN')")
@@ -59,10 +66,11 @@ public class NotificationController {
     }
 
     @PostMapping("/survey-reminder")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<Map<String, String>> triggerSurveyReminder(@RequestParam Long surveyId) {
-        String result = notificationService.triggerSurveyReminder(surveyId);
-        return ResponseEntity.ok(Map.of("message", result));
+        notificationService.ensureSurveyExists(surveyId);
+        notificationManualTriggerService.triggerSurveyReminderAsync(surveyId);
+        return ResponseEntity.accepted().body(Map.of("message", "Survey reminder has been queued."));
     }
 
     @GetMapping("/channels")
@@ -91,6 +99,21 @@ public class NotificationController {
     public ResponseEntity<Void> deleteChannel(@PathVariable Long id) {
         notificationChannelService.deleteChannel(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/chatops-channels")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ChatopsChannelConfigResponse>> getChatopsChannels() {
+        return ResponseEntity.ok(chatopsChannelConfigService.getConfigs());
+    }
+
+    @PutMapping("/chatops-channels/{purpose}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ChatopsChannelConfigResponse> upsertChatopsChannel(
+            @PathVariable ChatopsChannelPurpose purpose,
+            @Valid @RequestBody ChatopsChannelConfigUpsertRequest request
+    ) {
+        return ResponseEntity.ok(chatopsChannelConfigService.upsert(purpose, request));
     }
 
     @GetMapping("/templates")

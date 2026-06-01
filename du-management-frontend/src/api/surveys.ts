@@ -1,7 +1,7 @@
 import http from './http'
 import type {
   SurveyRequest, SurveyResponse, SurveyCompletionRequest,
-  SurveyProgressResponse, Page, Pageable
+  SurveyProgressResponse, SurveyAssignmentUpdateRequest, Page, Pageable
 } from '@/types'
 
 export const surveysApi = {
@@ -21,10 +21,14 @@ export const surveysApi = {
     return http.put<SurveyResponse>(`/surveys/${id}`, data)
   },
 
-  assign(surveyId: number, userId?: number, groupId?: number) {
+  assign(surveyId: number, userId: number) {
     return http.post<SurveyProgressResponse>(`/surveys/${surveyId}/assign`, null, {
-      params: { userId, groupId },
+      params: { userId },
     })
+  },
+
+  replaceAssignments(surveyId: number, data: SurveyAssignmentUpdateRequest) {
+    return http.put<SurveyProgressResponse>(`/surveys/${surveyId}/assignments`, data)
   },
 
   complete(surveyId: number, data: SurveyCompletionRequest) {

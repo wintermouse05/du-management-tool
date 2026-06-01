@@ -1,14 +1,18 @@
 package org.example.dumanagementbackend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.example.dumanagementbackend.dto.luckydraw.LuckyDrawSessionRequest;
 import org.example.dumanagementbackend.dto.luckydraw.LuckyDrawWinnerRequest;
 import org.example.dumanagementbackend.dto.luckydraw.LuckyDrawWinnerResponse;
 import org.example.dumanagementbackend.entity.Event;
@@ -86,6 +90,7 @@ class LuckyDrawServiceTest {
         when(prizeRepository.findById(10L)).thenReturn(Optional.of(prize));
         when(userRepository.findById(20L)).thenReturn(Optional.of(user));
         when(winnerRepository.countByPrizeId(10L)).thenReturn(1L);
+        when(winnerRepository.existsByPrizeSessionIdAndUserId(2L, 20L)).thenReturn(false);
         when(winnerRepository.save(any(LuckyDrawWinner.class))).thenAnswer(invocation -> {
             LuckyDrawWinner winner = invocation.getArgument(0);
             winner.setId(99L);
@@ -102,15 +107,90 @@ class LuckyDrawServiceTest {
     }
 
     @Test
+    void drawWinner_throwsBadRequestWhenUserAlreadyWonInSession() {
+        LuckyDrawPrize prize = buildPrize(10L, 2, "Headphone");
+        User user = buildUser(20L, "Lucky User");
+
+        when(prizeRepository.findById(10L)).thenReturn(Optional.of(prize));
+        when(userRepository.findById(20L)).thenReturn(Optional.of(user));
+        when(winnerRepository.countByPrizeId(10L)).thenReturn(0L);
+        when(winnerRepository.existsByPrizeSessionIdAndUserId(2L, 20L)).thenReturn(true);
+
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> luckyDrawService.drawWinner(new LuckyDrawWinnerRequest(10L, 20L))
+        );
+
+        assertEquals("User has already won a prize in session id=2", ex.getMessage());
+        verify(winnerRepository, never()).save(any(LuckyDrawWinner.class));
+    }
+
+    @Test
+    void drawWinnerFromPool_excludesUsersWhoAlreadyWonInSession() {
+        LuckyDrawPrize prize = buildPrize(10L, 2, "Headphone");
+        prize.getSession().setParticipantIds(new ArrayList<>(List.of(20L, 21L)));
+
+        User eligibleUser = buildUser(21L, "Eligible User");
+        User alreadyWinnerUser = buildUser(20L, "Already Winner");
+
+        LuckyDrawWinner existingWinner = new LuckyDrawWinner();
+        existingWinner.setId(200L);
+        existingWinner.setPrize(prize);
+        existingWinner.setUser(alreadyWinnerUser);
+
+        when(prizeRepository.findById(10L)).thenReturn(Optional.of(prize));
+        when(winnerRepository.countByPrizeId(10L)).thenReturn(0L);
+        when(winnerRepository.findByPrizeSessionId(2L)).thenReturn(List.of(existingWinner));
+        when(userRepository.findById(21L)).thenReturn(Optional.of(eligibleUser));
+        when(winnerRepository.existsByPrizeSessionIdAndUserId(2L, 21L)).thenReturn(false);
+        when(winnerRepository.save(any(LuckyDrawWinner.class))).thenAnswer(invocation -> {
+            LuckyDrawWinner winner = invocation.getArgument(0);
+            winner.setId(201L);
+            return winner;
+        });
+
+        LuckyDrawWinnerResponse response = luckyDrawService.drawWinnerFromPool(10L);
+
+        assertEquals(21L, response.userId());
+        assertEquals("Eligible User", response.fullName());
+    }
+
+    @Test
     void createSession_throwsNotFoundWhenEventMissing() {
         when(eventRepository.findById(7L)).thenReturn(Optional.empty());
 
         ResourceNotFoundException ex = assertThrows(
                 ResourceNotFoundException.class,
-                () -> luckyDrawService.createSession(new org.example.dumanagementbackend.dto.luckydraw.LuckyDrawSessionRequest(7L, "Session A"))
+                () -> luckyDrawService.createSession(new LuckyDrawSessionRequest(7L, "Session A"))
         );
 
         assertEquals("Event not found with id=7", ex.getMessage());
+    }
+
+    @Test
+    void createSession_autoCreatesDefaultPrizes() {
+        Event event = new Event();
+        event.setId(7L);
+        event.setName("Demo Event");
+
+        LuckyDrawSession savedSession = new LuckyDrawSession();
+        savedSession.setId(100L);
+        savedSession.setName("Session A");
+        savedSession.setEvent(event);
+
+        when(eventRepository.findById(7L)).thenReturn(Optional.of(event));
+        when(sessionRepository.save(any(LuckyDrawSession.class))).thenReturn(savedSession);
+        when(prizeRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        luckyDrawService.createSession(new LuckyDrawSessionRequest(7L, "Session A"));
+
+        verify(prizeRepository).saveAll(argThat(prizes -> {
+            List<LuckyDrawPrize> prizeList = new ArrayList<>();
+            prizes.forEach(prizeList::add);
+            return prizeList.size() == 3
+                    && prizeList.stream().allMatch(prize -> prize.getSession() == savedSession && prize.getQuantity() == 1)
+                    && prizeList.stream().map(LuckyDrawPrize::getPrizeName).toList().containsAll(List.of("1st", "2nd", "3rd"));
+        }));
     }
 
     @Test

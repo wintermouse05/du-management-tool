@@ -5,11 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Optional;
 import org.example.dumanagementbackend.dto.event.EventAttendanceRequest;
 import org.example.dumanagementbackend.dto.event.EventAttendeeResponse;
@@ -25,6 +27,7 @@ import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.EventAttendeeRepository;
 import org.example.dumanagementbackend.repository.EventRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -37,6 +40,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
@@ -55,8 +59,19 @@ class EventServiceTest {
     @Mock
     private GamificationService gamificationService;
 
+    @Mock
+    private NotificationService notificationService;
+
+    @Mock
+    private ChatopsNotificationService chatopsNotificationService;
+
     @InjectMocks
     private EventService eventService;
+
+    @BeforeEach
+    void injectOptionalServices() {
+        ReflectionTestUtils.setField(eventService, "chatopsNotificationService", chatopsNotificationService);
+    }
 
     // ── create ───────────────────────────────────────────────────────────────
 
@@ -64,6 +79,9 @@ class EventServiceTest {
     void create_returnsEventResponse() {
         EventRequest req = new EventRequest("Tech Talk", LocalDateTime.now().plusDays(5), "Room 101", "Talk description");
         Event saved = buildEvent(1L, "Tech Talk");
+        saved.setEventDate(req.eventDate());
+        saved.setLocation(req.location());
+        saved.setDescription(req.description());
 
         when(eventRepository.save(any(Event.class))).thenReturn(saved);
 
@@ -72,6 +90,27 @@ class EventServiceTest {
         assertEquals(1L, response.id());
         assertEquals("Tech Talk", response.name());
         verify(eventRepository).save(any(Event.class));
+        verify(chatopsNotificationService).sendEventCreatedNotification(
+                eq(1L),
+                eq("Tech Talk"),
+                eq(req.eventDate()),
+                eq("Room 101"),
+                eq("Talk description")
+        );
+        verify(notificationService, never()).triggerEventReminder(any());
+    }
+
+    @Test
+    void create_triggersImmediateReminderForEventWithinThreeDays() {
+        EventRequest req = new EventRequest("Townhall", LocalDateTime.now().plusDays(2), "Main Hall", "All hands");
+        Event saved = buildEvent(2L, "Townhall");
+        saved.setEventDate(req.eventDate());
+
+        when(eventRepository.save(any(Event.class))).thenReturn(saved);
+
+        eventService.create(req);
+
+        verify(notificationService).triggerEventReminder(2L);
     }
 
     // ── getAll ───────────────────────────────────────────────────────────────
@@ -83,13 +122,32 @@ class EventServiceTest {
         Event e2 = buildEvent(2L, "Event Two");
         Page<Event> page = new PageImpl<>(List.of(e1, e2), pageable, 2);
 
-        when(eventRepository.findAll(pageable)).thenReturn(page);
+        when(eventRepository.findAll(any(Pageable.class))).thenReturn(page);
 
         Page<EventResponse> result = eventService.getAll(pageable);
 
         assertEquals(2, result.getTotalElements());
         assertEquals("Event One", result.getContent().get(0).name());
         assertEquals("Event Two", result.getContent().get(1).name());
+    }
+
+    @Test
+    void getAll_resolvesCreatorDisplayName() {
+        Pageable pageable = PageRequest.of(0, 5);
+        Event event = buildEvent(7L, "Creator Event");
+        event.setCreatedBy("alice");
+        Page<Event> page = new PageImpl<>(List.of(event), pageable, 1);
+
+        User creator = new User();
+        creator.setUsername("alice");
+        creator.setFullName("Alice Nguyen");
+
+        when(eventRepository.findAll(any(Pageable.class))).thenReturn(page);
+        when(userRepository.findByUsernameIn(any(Collection.class))).thenReturn(List.of(creator));
+
+        Page<EventResponse> result = eventService.getAll(pageable);
+
+        assertEquals("Alice Nguyen", result.getContent().get(0).creator());
     }
 
     // ── getById ──────────────────────────────────────────────────────────────
@@ -118,12 +176,27 @@ class EventServiceTest {
     @Test
     void update_updatesAndReturnsResponse() {
         Event existing = buildEvent(5L, "Old Name");
+        existing.setCreatedBy("alice");
         EventRequest req = new EventRequest("New Name", LocalDateTime.now().plusDays(1), "Hall A", "New Description");
+        User editor = buildUser(40L, "Alice");
+        editor.setUsername("alice");
 
         when(eventRepository.findById(5L)).thenReturn(Optional.of(existing));
         when(eventRepository.save(any(Event.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(editor));
 
-        EventResponse response = eventService.update(5L, req);
+        Authentication auth = org.mockito.Mockito.mock(Authentication.class);
+        SecurityContext ctx = org.mockito.Mockito.mock(SecurityContext.class);
+        when(ctx.getAuthentication()).thenReturn(auth);
+        when(auth.getName()).thenReturn("alice");
+        SecurityContextHolder.setContext(ctx);
+
+        EventResponse response;
+        try {
+            response = eventService.update(5L, req);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
 
         assertEquals("New Name", response.name());
         assertEquals("Hall A", response.location());
@@ -171,7 +244,12 @@ class EventServiceTest {
             return ea;
         });
 
-        EventAttendeeResponse response = eventService.rsvp(11L, new EventAttendanceRequest(null, null));
+        EventAttendeeResponse response;
+        try {
+            response = eventService.rsvp(11L, new EventAttendanceRequest(null, null));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
 
         assertEquals(RsvpStatus.MAYBE, response.rsvpStatus());
         assertEquals(20L, response.userId());

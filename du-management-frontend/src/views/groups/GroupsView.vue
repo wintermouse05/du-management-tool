@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { groupsApi } from '@/api/groups'
 import { membersApi } from '@/api/members'
 import type { GroupResponse, GroupRequest, GroupMemberResponse, MemberResponse } from '@/types'
+import { getApiErrorDetail } from '@/utils/apiError'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -42,7 +43,7 @@ async function load() {
     const res = await groupsApi.getAll()
     groups.value = res.data
   } catch (err: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message || 'Failed to load groups', life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err, 'Failed to load groups'), life: 3000 })
   } finally {
     loading.value = false
   }
@@ -74,7 +75,7 @@ async function save() {
     dialogVisible.value = false
     load()
   } catch (err: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message || 'Failed to save group', life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err, 'Failed to save group'), life: 3000 })
   }
 }
 
@@ -87,11 +88,11 @@ async function doDelete() {
   if (!deleteTargetId.value) return
   try {
     await groupsApi.delete(deleteTargetId.value)
-    toast.add({ severity: 'success', summary: 'Group deleted', life: 2000 })
+    toast.add({ severity: 'success', summary: 'Group archived', life: 2000 })
     deleteConfirmDialog.value = false
     load()
   } catch (err: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err), life: 3000 })
   }
 }
 
@@ -103,7 +104,7 @@ async function openMembers(g: GroupResponse) {
     const res = await groupsApi.getMembers(g.id)
     members.value = res.data
   } catch (err: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err), life: 3000 })
   } finally {
     membersLoading.value = false
   }
@@ -126,7 +127,7 @@ async function addMember() {
     addMemberDialog.value = false
     openMembers(selectedGroup.value)
   } catch (err: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err), life: 3000 })
   }
 }
 
@@ -137,7 +138,7 @@ async function removeMember(userId: number) {
     toast.add({ severity: 'success', summary: 'Member removed', life: 2000 })
     openMembers(selectedGroup.value)
   } catch (err: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: err.response?.data?.message, life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err), life: 3000 })
   }
 }
 
@@ -156,9 +157,12 @@ onMounted(load)
 
     <div class="content-card">
       <DataTable :value="groups" :loading="loading" stripedRows>
+        <template #empty>
+          No Group has been created yet. Please create a new Group.
+        </template>
         <Column field="name" header="Name" />
         <Column field="description" header="Description">
-          <template #body="{ data }">{{ data.description || '—' }}</template>
+          <template #body="{ data }">{{ data.description || '-' }}</template>
         </Column>
         <Column header="Type" style="width:120px">
           <template #body="{ data }">
@@ -181,16 +185,16 @@ onMounted(load)
     <Dialog v-model:visible="dialogVisible" :header="editing ? 'Edit Group' : 'Create Group'" modal :style="{ width: '480px' }">
       <div style="display:flex;flex-direction:column;gap:var(--space-4);">
         <div class="form-field">
-          <label>Name</label>
+          <label class="required">Name</label>
           <InputText v-model="form.name" placeholder="e.g. Engineering, All" fluid />
         </div>
         <div class="form-field">
-          <label>Description</label>
+          <label>Description <span class="optional-hint">(optional)</span></label>
           <Textarea v-model="form.description" rows="3" placeholder="Optional description" fluid />
         </div>
         <div class="form-field" style="display:flex;align-items:center;gap:var(--space-3);">
           <Checkbox v-model="form.allGroup" :binary="true" input-id="allGroup" />
-          <label for="allGroup">All Users Group — dynamically includes every active user</label>
+          <label for="allGroup">All Users Group  Edynamically includes every active user</label>
         </div>
       </div>
       <template #footer>
@@ -212,6 +216,9 @@ onMounted(load)
           />
         </div>
         <DataTable :value="members" :loading="membersLoading" stripedRows>
+          <template #empty>
+            No members in this Group yet. Please add a member.
+          </template>
           <Column field="username" header="Username" />
           <Column field="fullName" header="Full Name" />
           <Column field="email" header="Email" />
@@ -229,7 +236,7 @@ onMounted(load)
 
     <Dialog v-model:visible="addMemberDialog" header="Add Member" modal :style="{ width: '400px' }">
       <div class="form-field">
-        <label>User</label>
+        <label class="required">User</label>
         <Select
           v-model="selectedUserId"
           :options="availableUsers"
@@ -251,11 +258,11 @@ onMounted(load)
       </template>
     </Dialog>
 
-    <Dialog v-model:visible="deleteConfirmDialog" header="Delete Group" modal :style="{ width: '360px' }">
-      <p>Are you sure you want to delete this group? All member associations will be removed.</p>
+    <Dialog v-model:visible="deleteConfirmDialog" header="Archive Group" modal :style="{ width: '360px' }">
+      <p>Archive this group and hide it from group lists?</p>
       <template #footer>
         <Button label="Cancel" text @click="deleteConfirmDialog = false" />
-        <Button label="Delete" severity="danger" icon="pi pi-trash" @click="doDelete" />
+        <Button label="Archive" severity="danger" icon="pi pi-trash" @click="doDelete" />
       </template>
     </Dialog>
   </div>

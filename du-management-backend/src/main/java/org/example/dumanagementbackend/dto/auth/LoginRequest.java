@@ -9,7 +9,7 @@ public record LoginRequest(
         String username,
 
         @NotBlank(message = "password is required")
-        @Size(min = 8, max = 128, message = "password must be between 8 and 128 characters")
+        @Size(max = 128, message = "password must be at most 128 characters")
         String password
 ) {
 }

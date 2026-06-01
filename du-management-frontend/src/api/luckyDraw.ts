@@ -49,4 +49,8 @@ export const luckyDrawApi = {
       params: { prizeId, ...params },
     })
   },
+
+  getWinnersBySession(sessionId: number) {
+    return http.get<LuckyDrawWinnerResponse[]>(`/lucky-draw/sessions/${sessionId}/winners`)
+  },
 }

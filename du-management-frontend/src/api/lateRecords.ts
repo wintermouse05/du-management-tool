@@ -1,5 +1,6 @@
 import http from './http'
 import type {
+  LateRecordStatus,
   LateRecordRequest, LateRecordResponse,
   LateSummaryResponse, Page, Pageable
 } from '@/types'
@@ -37,5 +38,9 @@ export const lateRecordsApi = {
 
   deleteRecord(id: number) {
     return http.delete<void>(`/late-records/${id}`)
+  },
+
+  updateStatus(id: number, status: LateRecordStatus) {
+    return http.patch<LateRecordResponse>(`/late-records/${id}/status`, { status })
   },
 }

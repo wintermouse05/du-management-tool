@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { getApiErrorDetail } from '@/utils/apiError'
 import InputText from 'primevue/inputtext'
 import Password from 'primevue/password'
 import Button from 'primevue/button'
@@ -49,7 +50,7 @@ async function handleLogin() {
     sessionStorage.removeItem(POST_LOGIN_REDIRECT_STORAGE_KEY)
     await router.push(postLoginRedirect)
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Invalid credentials. Please try again.'
+    error.value = getApiErrorDetail(err, 'Invalid credentials. Please try again.')
   } finally {
     loading.value = false
   }
@@ -238,3 +239,5 @@ async function handleLogin() {
   .auth-header { margin-bottom: var(--space-6); }
 }
 </style>
+
+

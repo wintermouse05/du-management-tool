@@ -6,6 +6,9 @@ import type {
   NotificationTemplateResponse,
   NotificationChannelRequest,
   NotificationChannelResponse,
+  ChatopsChannelPurpose,
+  ChatopsChannelConfigUpsertRequest,
+  ChatopsChannelConfigResponse,
   NotificationInboxResponse,
   NotificationUnreadCountResponse,
   Page,
@@ -75,6 +78,14 @@ export const notificationsApi = {
     return http.delete<void>(`/notifications/channels/${id}`)
   },
 
+  getChatopsChannels() {
+    return http.get<ChatopsChannelConfigResponse[]>('/notifications/chatops-channels')
+  },
+
+  upsertChatopsChannel(purpose: ChatopsChannelPurpose, payload: ChatopsChannelConfigUpsertRequest) {
+    return http.put<ChatopsChannelConfigResponse>(`/notifications/chatops-channels/${purpose}`, payload)
+  },
+
   // Notification Schedules
   getSchedules() {
     return http.get<import('@/types').NotificationScheduleResponse[]>('/notification-schedules')
@@ -86,6 +97,16 @@ export const notificationsApi = {
 
   upsertSchedule(type: string, payload: { sendTime: string; channelId?: string; enabled: boolean }) {
     return http.put<import('@/types').NotificationScheduleResponse>(`/notification-schedules/${type}`, payload)
+  },
+
+  runLatePenaltySchedule() {
+    return http.post<{
+      scheduleEnabled: boolean
+      sent: boolean
+      unpaidRecordCount: number
+      unpaidUserCount: number
+      message: string
+    }>('/notification-schedules/late/run')
   },
 
   deleteSchedule(id: number) {

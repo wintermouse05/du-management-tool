@@ -7,8 +7,11 @@ import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.TimeoutError;
+import com.microsoft.playwright.options.LoadState;
 import com.microsoft.playwright.options.WaitUntilState;
 import org.example.dumanagementbackend.dto.order.MenuScrapeItemResponse;
+import org.example.dumanagementbackend.dto.order.MenuScrapeResponse;
 import org.example.dumanagementbackend.exception.BadRequestException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -25,9 +28,11 @@ import java.util.List;
 public class MenuScraperService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MenuScraperService.class);
+    private static final double PAGE_LOAD_TIMEOUT_MS = 90_000D;
+    private static final double NETWORK_IDLE_GRACE_MS = 10_000D;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public List<MenuScrapeItemResponse> scrape(String url) {
+    public MenuScrapeResponse scrape(String url) {
         boolean isShopeeFood = url.contains("shopeefood.vn");
 
         String renderedHtml;
@@ -37,13 +42,19 @@ public class MenuScraperService {
             BrowserContext context = browser.newContext(new Browser.NewContextOptions()
                     .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"));
             Page page = context.newPage();
+            page.setDefaultTimeout(PAGE_LOAD_TIMEOUT_MS);
+            page.setDefaultNavigationTimeout(PAGE_LOAD_TIMEOUT_MS);
 
             LOGGER.info("Scraping URL: {} (type: {})", url, isShopeeFood ? "ShopeeFood" : "GrabFood");
-            page.navigate(url, new Page.NavigateOptions().setWaitUntil(WaitUntilState.NETWORKIDLE));
+            page.navigate(url, new Page.NavigateOptions()
+                    .setWaitUntil(WaitUntilState.DOMCONTENTLOADED)
+                    .setTimeout(PAGE_LOAD_TIMEOUT_MS));
+            waitForNetworkToSettle(page, url);
             renderedHtml = page.content();
             browser.close();
         } catch (Exception e) {
-            throw new BadRequestException("Failed to load URL: " + e.getMessage());
+            LOGGER.error("Failed to load menu URL: {}", url, e);
+            throw new BadRequestException("Failed to load URL. Please verify the link and try again.");
         }
 
         if (isShopeeFood) {
@@ -52,11 +63,21 @@ public class MenuScraperService {
         return parseGrabFoodMenu(renderedHtml);
     }
 
+    private void waitForNetworkToSettle(Page page, String url) {
+        try {
+            page.waitForLoadState(LoadState.NETWORKIDLE, new Page.WaitForLoadStateOptions()
+                    .setTimeout(NETWORK_IDLE_GRACE_MS));
+        } catch (TimeoutError e) {
+            LOGGER.debug("Page kept network activity while scraping {}; continuing with current DOM.", url);
+        }
+    }
+
     // ==================== ShopeeFood Parser (HTML-based) ====================
 
-    private List<MenuScrapeItemResponse> parseShopeeFoodMenu(String html) {
+    private MenuScrapeResponse parseShopeeFoodMenu(String html) {
         Document doc = Jsoup.parse(html);
         List<MenuScrapeItemResponse> items = new ArrayList<>();
+        String restaurantName = extractRestaurantName(doc, null);
 
         Elements itemElements = doc.select(".menu-restaurant-detail .item-restaurant-row");
 
@@ -75,12 +96,12 @@ public class MenuScraperService {
         }
 
         LOGGER.info("Extracted {} items from ShopeeFood", items.size());
-        return items;
+        return new MenuScrapeResponse(restaurantName, items);
     }
 
     // ==================== GrabFood Parser (JSON-LD based) ====================
 
-    private List<MenuScrapeItemResponse> parseGrabFoodMenu(String html) {
+    private MenuScrapeResponse parseGrabFoodMenu(String html) {
         Document doc = Jsoup.parse(html);
         Elements scripts = doc.select("script");
         String jsonString = null;
@@ -114,9 +135,11 @@ public class MenuScraperService {
         }
 
         List<MenuScrapeItemResponse> items = new ArrayList<>();
+        String restaurantName = extractRestaurantName(doc, null);
 
         try {
             JsonNode rootNode = objectMapper.readTree(trimmedJson);
+            restaurantName = firstNonBlank(rootNode.path("name").asText(null), restaurantName);
 
             JsonNode sectionsNode = rootNode.path("hasMenu").path("hasMenuSection");
             if (sectionsNode.isArray()) {
@@ -155,10 +178,48 @@ public class MenuScraperService {
         } catch (BadRequestException e) {
             throw e;
         } catch (Exception e) {
-            throw new BadRequestException("Failed to parse GrabFood menu data: " + e.getMessage());
+            LOGGER.error("Failed to parse GrabFood menu data", e);
+            throw new BadRequestException("Failed to parse GrabFood menu data. Please try again later.");
         }
 
         LOGGER.info("Extracted {} items from GrabFood", items.size());
-        return items;
+        return new MenuScrapeResponse(restaurantName, items);
+    }
+
+    private String extractRestaurantName(Document doc, String fallback) {
+        String name = firstNonBlank(
+                doc.selectFirst("meta[property=og:title]") != null
+                        ? doc.selectFirst("meta[property=og:title]").attr("content")
+                        : null,
+                doc.selectFirst("meta[name=twitter:title]") != null
+                        ? doc.selectFirst("meta[name=twitter:title]").attr("content")
+                        : null,
+                doc.selectFirst("h1") != null ? doc.selectFirst("h1").text() : null,
+                doc.title(),
+                fallback
+        );
+        return cleanRestaurantName(name);
+    }
+
+    private String cleanRestaurantName(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        String cleaned = name.trim()
+                .replaceAll("\\s+", " ")
+                .replaceFirst("(?i)\\s*[-|\\u2013\\u2014]\\s*(GrabFood|ShopeeFood).*$", "")
+                .replaceFirst("(?i)\\s*[-|\\u2013\\u2014]\\s*Food Delivery.*$", "")
+                .replaceFirst("(?i)^Order\\s+", "")
+                .trim();
+        return cleaned.isBlank() ? null : cleaned;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }

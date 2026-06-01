@@ -7,10 +7,13 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -19,14 +22,21 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.example.dumanagementbackend.dto.member.MemberRequest;
 import org.example.dumanagementbackend.dto.member.MemberResponse;
+import org.example.dumanagementbackend.dto.member.MemberSkillRequest;
+import org.example.dumanagementbackend.dto.member.MemberSkillResponse;
 import org.example.dumanagementbackend.entity.Role;
 import org.example.dumanagementbackend.entity.User;
+import org.example.dumanagementbackend.entity.UserSkill;
+import org.example.dumanagementbackend.entity.enums.MemberSkillType;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.RoleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -40,12 +50,18 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class MemberService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(MemberService.class);
+    private static final int MIN_SKILL_LEVEL = 1;
+    private static final int MAX_SKILL_LEVEL = 5;
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public MemberResponse create(MemberRequest request) {
+        validateCreateUniqueness(request.username(), request.email());
         User user = new User();
         apply(user, request);
         if (user.getTotalPoints() == null) {
@@ -54,21 +70,41 @@ public class MemberService {
         return toResponse(userRepository.save(user));
     }
 
-    public Page<MemberResponse> getAll(Pageable pageable) {
-        return userRepository.findAll(pageable).map(this::toResponse);
+    public Page<MemberResponse> getAll(Pageable pageable, boolean includeAdmins, boolean includeInactive) {
+        Pageable resolvedPageable = toZeroBasedPageable(pageable);
+        UserStatus visibleStatus = includeInactive ? null : UserStatus.ACTIVE;
+        return userRepository.searchMembers("%", visibleStatus, includeAdmins, resolvedPageable).map(this::toResponse);
     }
 
-    public Page<MemberResponse> search(String q, UserStatus status, Pageable pageable) {
+    public Page<MemberResponse> search(
+            String q,
+            UserStatus status,
+            Pageable pageable,
+            boolean includeAdmins,
+            boolean includeInactive
+    ) {
         String likePattern = normalizeLikePattern(q);
-        return userRepository.searchMembers(likePattern, status, pageable).map(this::toResponse);
+        Pageable resolvedPageable = toZeroBasedPageable(pageable);
+        if (!includeInactive && status == UserStatus.INACTIVE) {
+            return Page.empty(resolvedPageable);
+        }
+
+        UserStatus visibleStatus = includeInactive ? status : UserStatus.ACTIVE;
+        return userRepository.searchMembers(likePattern, visibleStatus, includeAdmins, resolvedPageable).map(this::toResponse);
     }
 
-    public byte[] exportCsv(String q, UserStatus status) {
+    public byte[] exportCsv(String q, UserStatus status, boolean includeAdmins, boolean includeInactive) {
         String likePattern = normalizeLikePattern(q);
-        List<User> users = userRepository.searchMembersForExport(likePattern, status);
+        List<User> users = !includeInactive && status == UserStatus.INACTIVE
+                ? List.of()
+                : userRepository.searchMembersForExport(
+                        likePattern,
+                        includeInactive ? status : UserStatus.ACTIVE,
+                        includeAdmins
+                );
 
         StringBuilder csv = new StringBuilder();
-        csv.append("id,username,email,fullName,role,status,joinDate,tenureMonths,totalPoints\n");
+        csv.append("id,username,email,fullName,role,status,joinDate,tenureMonths,totalPoints,skills\n");
         for (User user : users) {
             csv.append(user.getId()).append(',')
                     .append(csvEscape(user.getUsername())).append(',')
@@ -80,6 +116,8 @@ public class MemberService {
                     .append(calculateTenureMonths(user.getJoinDate()) != null ? calculateTenureMonths(user.getJoinDate()) : "")
                     .append(',')
                     .append(user.getTotalPoints())
+                    .append(',')
+                    .append(csvEscape(formatSkillsForCsv(user)))
                     .append('\n');
         }
 
@@ -103,7 +141,8 @@ public class MemberService {
                 throw new BadRequestException("Only .csv or .xlsx files are supported");
             }
         } catch (IOException ex) {
-            throw new BadRequestException("Unable to read import file: " + ex.getMessage());
+            LOGGER.error("Unable to read import file. fileName={}", file.getOriginalFilename(), ex);
+            throw new BadRequestException("Unable to read import file. Please verify file format and try again.");
         }
 
         int imported = 0;
@@ -128,6 +167,7 @@ public class MemberService {
             user.setDob(parseDate(value(row, "dob")));
             user.setJoinDate(parseDate(value(row, "joindate")));
             user.setRole(resolveRole(value(row, "roleid"), value(row, "rolename")));
+            user.getSkills().addAll(toUserSkills(parseSkillRequests(value(row, "skills"))));
             user.setTotalPoints(0);
 
             userRepository.save(user);
@@ -144,6 +184,7 @@ public class MemberService {
     @Transactional
     public MemberResponse update(Long id, MemberRequest request) {
         User user = getEntityById(id);
+        validateUpdateUniqueness(id, request.username(), request.email());
         apply(user, request);
         return toResponse(userRepository.save(user));
     }
@@ -155,13 +196,29 @@ public class MemberService {
         return toResponse(userRepository.save(user));
     }
 
+    @Transactional
+    public void delete(Long id) {
+        User user = getEntityById(id);
+        if (SystemAccountUtils.isAdminAccount(user)) {
+            throw new BadRequestException(
+                    "MEMBER_SYSTEM_ACCOUNT_ARCHIVE_FORBIDDEN",
+                    "The system admin account cannot be archived."
+            );
+        }
+
+        user.setStatus(UserStatus.INACTIVE);
+        SoftDeleteUtils.markDeleted(user);
+        userRepository.save(user);
+        refreshTokenService.revokeActiveByUserId(user.getId(), "USER_ARCHIVED");
+    }
+
     public User getEntityById(Long id) {
-        return userRepository.findById(id)
+        return userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + id));
     }
 
     private void apply(User user, MemberRequest request) {
-        Role role = roleRepository.findById(request.roleId())
+        Role role = roleRepository.findByIdAndDeletedAtIsNull(request.roleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found with id=" + request.roleId()));
         user.setRole(role);
         user.setUsername(request.username());
@@ -170,6 +227,8 @@ public class MemberService {
         user.setDob(request.dob());
         user.setJoinDate(request.joinDate());
         user.setStatus(request.status() != null ? request.status() : UserStatus.ACTIVE);
+        user.getSkills().clear();
+        user.getSkills().addAll(toUserSkills(request.skills()));
         if (request.password() != null && !request.password().isBlank()) {
             user.setPassword(passwordEncoder.encode(request.password()));
         } else if (user.getPassword() == null || user.getPassword().isBlank()) {
@@ -189,8 +248,56 @@ public class MemberService {
                 user.getJoinDate(),
                 calculateTenureMonths(user.getJoinDate()),
                 user.getTotalPoints(),
-                user.getStatus()
+                user.getStatus(),
+                toSkillResponses(user)
         );
+    }
+
+    private List<UserSkill> toUserSkills(List<MemberSkillRequest> skillRequests) {
+        if (skillRequests == null || skillRequests.isEmpty()) {
+            return List.of();
+        }
+
+        Set<MemberSkillType> seenSkills = EnumSet.noneOf(MemberSkillType.class);
+        List<UserSkill> userSkills = new ArrayList<>();
+        for (MemberSkillRequest skillRequest : skillRequests) {
+            if (skillRequest == null || skillRequest.skill() == null || skillRequest.level() == null) {
+                throw new BadRequestException("Member skill and level are required.");
+            }
+            if (skillRequest.level() < MIN_SKILL_LEVEL || skillRequest.level() > MAX_SKILL_LEVEL) {
+                throw new BadRequestException("Member skill level must be between 1 and 5.");
+            }
+            if (!seenSkills.add(skillRequest.skill())) {
+                throw new BadRequestException("Each member skill can only be added once.");
+            }
+            userSkills.add(new UserSkill(skillRequest.skill(), skillRequest.level()));
+        }
+
+        userSkills.sort(Comparator.comparing(skill -> skill.getSkill().getLabel()));
+        return userSkills;
+    }
+
+    private List<MemberSkillResponse> toSkillResponses(User user) {
+        if (user.getSkills() == null || user.getSkills().isEmpty()) {
+            return List.of();
+        }
+
+        return user.getSkills().stream()
+                .filter(skill -> skill.getSkill() != null)
+                .sorted(Comparator.comparing(skill -> skill.getSkill().getLabel()))
+                .map(skill -> new MemberSkillResponse(
+                        skill.getSkill(),
+                        skill.getSkill().getLabel(),
+                        skill.getLevel()
+                ))
+                .toList();
+    }
+
+    private String formatSkillsForCsv(User user) {
+        return toSkillResponses(user).stream()
+                .map(skill -> skill.skillLabel() + ":" + skill.level())
+                .reduce((left, right) -> left + "; " + right)
+                .orElse("");
     }
 
     private String normalizeLikePattern(String q) {
@@ -208,6 +315,33 @@ public class MemberService {
                 .replace("%", "\\%")
                 .replace("_", "\\_");
         return "%" + escaped + "%";
+    }
+
+    private void validateCreateUniqueness(String username, String email) {
+        if (userRepository.existsByUsername(username)) {
+            throw new BadRequestException("AUTH_USERNAME_EXISTS", "Username already exists.");
+        }
+        if (userRepository.existsByEmail(email)) {
+            throw new BadRequestException("AUTH_EMAIL_EXISTS", "Email already exists.");
+        }
+    }
+
+    private void validateUpdateUniqueness(Long userId, String username, String email) {
+        if (userRepository.existsByUsernameAndIdNot(username, userId)) {
+            throw new BadRequestException("AUTH_USERNAME_EXISTS", "Username already exists.");
+        }
+        if (userRepository.existsByEmailAndIdNot(email, userId)) {
+            throw new BadRequestException("AUTH_EMAIL_EXISTS", "Email already exists.");
+        }
+    }
+
+    private Pageable toZeroBasedPageable(Pageable pageable) {
+        if (pageable == null || pageable.isUnpaged()) {
+            return pageable;
+        }
+
+        int resolvedPage = Math.max(pageable.getPageNumber() - 1, 0);
+        return PageRequest.of(resolvedPage, pageable.getPageSize(), pageable.getSort());
     }
 
     private Long calculateTenureMonths(LocalDate joinDate) {
@@ -357,11 +491,72 @@ public class MemberService {
         }
     }
 
+    private List<MemberSkillRequest> parseSkillRequests(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+
+        Set<MemberSkillType> seenSkills = EnumSet.noneOf(MemberSkillType.class);
+        List<MemberSkillRequest> skills = new ArrayList<>();
+        String[] entries = value.split("[;|]");
+        for (String entry : entries) {
+            String trimmed = entry.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+
+            String[] parts = trimmed.split("[:=]", 2);
+            MemberSkillType skill = parseSkillType(parts[0]);
+            Integer level = parts.length > 1 ? parseSkillLevel(parts[1]) : MIN_SKILL_LEVEL;
+            if (skill == null || level == null || !seenSkills.add(skill)) {
+                continue;
+            }
+
+            skills.add(new MemberSkillRequest(skill, level));
+        }
+
+        return skills;
+    }
+
+    private MemberSkillType parseSkillType(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+        for (MemberSkillType skill : MemberSkillType.values()) {
+            if (skill.getLabel().equalsIgnoreCase(trimmed) || skill.name().equalsIgnoreCase(trimmed)) {
+                return skill;
+            }
+        }
+
+        String enumName = trimmed.toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z0-9]+", "_")
+                .replaceAll("^_|_$", "");
+        try {
+            return MemberSkillType.valueOf(enumName);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private Integer parseSkillLevel(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            int level = Integer.parseInt(value.trim());
+            return level >= MIN_SKILL_LEVEL && level <= MAX_SKILL_LEVEL ? level : null;
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
     private Role resolveRole(String roleIdValue, String roleNameValue) {
         if (roleIdValue != null) {
             try {
                 Long roleId = Long.parseLong(roleIdValue);
-                return roleRepository.findById(roleId)
+                return roleRepository.findByIdAndDeletedAtIsNull(roleId)
                         .orElseThrow(() -> new ResourceNotFoundException("Role not found with id=" + roleId));
             } catch (NumberFormatException ignored) {
                 // Fallback to role name/default below.
@@ -369,11 +564,11 @@ public class MemberService {
         }
 
         if (roleNameValue != null) {
-            return roleRepository.findByName(roleNameValue.trim().toUpperCase(Locale.ROOT))
+            return roleRepository.findByNameAndDeletedAtIsNull(roleNameValue.trim().toUpperCase(Locale.ROOT))
                     .orElseThrow(() -> new ResourceNotFoundException("Role not found with name=" + roleNameValue));
         }
 
-        return roleRepository.findByName("MEMBER")
+        return roleRepository.findByNameAndDeletedAtIsNull("MEMBER")
                 .orElseThrow(() -> new ResourceNotFoundException("Role MEMBER is missing"));
     }
 }

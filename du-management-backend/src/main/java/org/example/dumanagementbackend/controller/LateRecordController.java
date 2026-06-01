@@ -5,6 +5,7 @@ import java.time.LocalDate;
 
 import org.example.dumanagementbackend.dto.late.LateRecordRequest;
 import org.example.dumanagementbackend.dto.late.LateRecordResponse;
+import org.example.dumanagementbackend.dto.late.LateRecordStatusUpdateRequest;
 import org.example.dumanagementbackend.dto.late.LateSummaryResponse;
 import org.example.dumanagementbackend.service.LateRecordService;
 import jakarta.validation.Valid;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PatchMapping;
 
 @RestController
 @RequestMapping("/api/late-records")
@@ -93,5 +95,14 @@ public class LateRecordController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         lateRecordService.deleteLateRecord(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<LateRecordResponse> updateStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody LateRecordStatusUpdateRequest request
+    ) {
+        return ResponseEntity.ok(lateRecordService.updateStatus(id, request.status()));
     }
 }

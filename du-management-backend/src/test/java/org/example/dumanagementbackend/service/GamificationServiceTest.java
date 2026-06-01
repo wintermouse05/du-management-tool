@@ -128,12 +128,35 @@ class GamificationServiceTest {
         Page<User> userPage = new PageImpl<>(List.of(first, second), pageable, 2);
         when(userRepository.findByStatusOrderByTotalPointsDesc(UserStatus.ACTIVE, pageable)).thenReturn(userPage);
 
-        Page<LeaderboardEntryResponse> result = gamificationService.leaderboard(pageable);
+        Page<LeaderboardEntryResponse> result = gamificationService.leaderboard(pageable, true);
 
         assertEquals(2, result.getTotalElements());
         assertEquals("Alice", result.getContent().get(0).fullName());
         assertEquals(120, result.getContent().get(0).totalPoints());
         assertEquals("Bob", result.getContent().get(1).fullName());
+    }
+
+    @Test
+    void leaderboard_excludesOnlyAdminAccountWhenRequested() {
+        Pageable pageable = PageRequest.of(0, 2);
+
+        User adminRoleUser = new User();
+        adminRoleUser.setId(12L);
+        adminRoleUser.setUsername("team-admin");
+        adminRoleUser.setFullName("Team Admin");
+        adminRoleUser.setTotalPoints(80);
+
+        Page<User> userPage = new PageImpl<>(List.of(adminRoleUser), pageable, 1);
+        when(userRepository.findByStatusAndUsernameIgnoreCaseNotOrderByTotalPointsDesc(
+                UserStatus.ACTIVE,
+                SystemAccountUtils.ADMIN_USERNAME,
+                pageable
+        )).thenReturn(userPage);
+
+        Page<LeaderboardEntryResponse> result = gamificationService.leaderboard(pageable, false);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("Team Admin", result.getContent().get(0).fullName());
     }
 
     @Test

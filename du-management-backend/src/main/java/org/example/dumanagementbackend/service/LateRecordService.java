@@ -1,6 +1,8 @@
 package org.example.dumanagementbackend.service;
 
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -10,9 +12,12 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -24,6 +29,8 @@ import org.example.dumanagementbackend.entity.LateRecord;
 import org.example.dumanagementbackend.entity.PointHistory;
 import org.example.dumanagementbackend.entity.PointRule;
 import org.example.dumanagementbackend.entity.User;
+import org.example.dumanagementbackend.entity.enums.LateRecordStatus;
+import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.LateRecordRepository;
 import org.example.dumanagementbackend.repository.PointHistoryRepository;
@@ -37,6 +44,9 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +58,13 @@ import lombok.RequiredArgsConstructor;
 public class LateRecordService {
 
     private static final Logger log = LoggerFactory.getLogger(LateRecordService.class);
+    private static final int FINE_PER_REPEAT_LATE = 50_000;
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final Pattern REPORT_DATE_PATTERN = Pattern.compile("(\\d{4}/\\d{2}/\\d{2})");
+    private static final Pattern TABLE_PATTERN = Pattern.compile("\\|\\s*([^|\\n]+?)\\s*\\|\\s*([^|\\n]+?)\\s*\\|");
+    private static final Pattern TIME_PATTERN = Pattern.compile("\\b\\d{1,2}:\\d{2}(?::\\d{2})?\\b");
+    private static final Pattern SEPARATOR_PATTERN = Pattern.compile("^-+$");
+    private static final DateTimeFormatter REPORT_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
     private final LateRecordRepository lateRecordRepository;
     private final UserRepository userRepository;
@@ -68,26 +85,33 @@ public class LateRecordService {
         record.setRecordDate(request.recordDate());
         record.setMinutesLate(request.minutesLate());
         record.setReason(request.reason());
+        record.setStatus(LateRecordStatus.FIRST_TIME);
+        record.setFineAmount(0);
         LateRecord saved = lateRecordRepository.save(record);
 
-        pointRuleRepository.findByActionCode("LATE_PENALTY").ifPresent(rule -> applyLatePenalty(user, rule, saved));
+        normalizeUserMonthStatuses(user.getId(), YearMonth.from(saved.getRecordDate()));
+        LateRecord normalized = lateRecordRepository.findById(saved.getId()).orElse(saved);
 
-        return toResponse(saved);
+        pointRuleRepository.findByActionCode("LATE_PENALTY").ifPresent(rule -> applyLatePenalty(user, rule, normalized));
+        return toResponse(normalized);
     }
 
     public Page<LateRecordResponse> getAll(Pageable pageable) {
-        return lateRecordRepository.findAll(pageable).map(this::toResponse);
+        Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
+        return lateRecordRepository.findAll(resolvedPageable).map(this::toResponse);
     }
 
     public Page<LateRecordResponse> getByUser(Long userId, Pageable pageable) {
-        return lateRecordRepository.findByUserId(userId, pageable).map(this::toResponse);
+        Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
+        return lateRecordRepository.findByUserId(userId, resolvedPageable).map(this::toResponse);
     }
 
     public Page<LateRecordResponse> getByDateRange(LocalDate fromDate, LocalDate toDate, Pageable pageable) {
+        Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
         if (fromDate != null && toDate != null) {
-            return lateRecordRepository.findByRecordDateBetween(fromDate, toDate, pageable).map(this::toResponse);
+            return lateRecordRepository.findByRecordDateBetween(fromDate, toDate, resolvedPageable).map(this::toResponse);
         }
-        return getAll(pageable);
+        return getAll(resolvedPageable);
     }
 
     @Cacheable(
@@ -95,6 +119,7 @@ public class LateRecordService {
             key = "{#year,#month,#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString()}"
     )
     public Page<LateSummaryResponse> getMonthlySummary(int year, int month, Pageable pageable) {
+        Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
         YearMonth yearMonth = YearMonth.of(year, month);
         LocalDate start = yearMonth.atDay(1);
         LocalDate end = yearMonth.atEndOfMonth();
@@ -112,12 +137,12 @@ public class LateRecordService {
                 .sorted(Comparator.comparingLong(LateSummaryResponse::totalLateTimes).reversed())
                 .toList();
 
-        int pageStart = (int) pageable.getOffset();
+        int pageStart = (int) resolvedPageable.getOffset();
         if (pageStart >= summaries.size()) {
-            return new PageImpl<>(List.of(), pageable, summaries.size());
+            return new PageImpl<>(List.of(), resolvedPageable, summaries.size());
         }
-        int pageEnd = Math.min(pageStart + pageable.getPageSize(), summaries.size());
-        return new PageImpl<>(summaries.subList(pageStart, pageEnd), pageable, summaries.size());
+        int pageEnd = Math.min(pageStart + resolvedPageable.getPageSize(), summaries.size());
+        return new PageImpl<>(summaries.subList(pageStart, pageEnd), resolvedPageable, summaries.size());
     }
 
     public byte[] exportCsv(Integer year, Integer month) {
@@ -134,14 +159,16 @@ public class LateRecordService {
                 .toList();
 
         StringBuilder csv = new StringBuilder();
-        csv.append("id,userId,fullName,recordDate,minutesLate,reason\n");
+        csv.append("id,userId,fullName,recordDate,minutesLate,reason,status,fineAmount\n");
         for (LateRecord record : sorted) {
             csv.append(record.getId()).append(',')
                     .append(record.getUser().getId()).append(',')
                     .append(csvEscape(record.getUser().getFullName())).append(',')
                     .append(record.getRecordDate()).append(',')
                     .append(record.getMinutesLate()).append(',')
-                    .append(csvEscape(record.getReason()))
+                    .append(csvEscape(record.getReason())).append(',')
+                    .append(record.getStatus() != null ? record.getStatus() : "").append(',')
+                    .append(record.getFineAmount() != null ? record.getFineAmount() : 0)
                     .append('\n');
         }
 
@@ -151,11 +178,49 @@ public class LateRecordService {
     @Transactional
     @CacheEvict(cacheNames = "lateMonthlySummary", allEntries = true)
     public void deleteLateRecord(Long id) {
-        lateRecordRepository.deleteById(id);
+        LateRecord existing = lateRecordRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Late record not found with id=" + id));
+        Long userId = existing.getUser().getId();
+        YearMonth month = YearMonth.from(existing.getRecordDate());
+        lateRecordRepository.delete(existing);
+        normalizeUserMonthStatuses(userId, month);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = "lateMonthlySummary", allEntries = true)
+    public LateRecordResponse updateStatus(Long id, LateRecordStatus status) {
+        ensureAdminCanManageStatus();
+        if (status == null) {
+            throw new BadRequestException("status is required");
+        }
+        if (status == LateRecordStatus.FIRST_TIME) {
+            throw new BadRequestException("FIRST_TIME is auto-calculated and cannot be set manually.");
+        }
+
+        LateRecord record = lateRecordRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Late record not found with id=" + id));
+
+        if ((status == LateRecordStatus.PAID || status == LateRecordStatus.UNPAID)
+                && !isChargeableAfterStatusChange(record, status)) {
+            throw new BadRequestException("Only late records from the second time in month can be marked paid/unpaid.");
+        }
+
+        record.setStatus(status);
+        if (status == LateRecordStatus.IGNORE) {
+            record.setFineAmount(0);
+        } else {
+            record.setFineAmount(FINE_PER_REPEAT_LATE);
+        }
+        lateRecordRepository.save(record);
+
+        normalizeUserMonthStatuses(record.getUser().getId(), YearMonth.from(record.getRecordDate()));
+        LateRecord updated = lateRecordRepository.findById(id).orElse(record);
+        return toResponse(updated);
     }
 
     // ---- ChatOps-powered automated late detection ----
 
+    @Transactional
     public int checkNow(String channelId) {
         if (chatopsService == null) {
             throw new IllegalStateException("ChatOps is not enabled. Set chatops.enabled=true and configure chatops properties.");
@@ -164,14 +229,13 @@ public class LateRecordService {
         return fetchLateCheckinsFromChat(targetChannel, LocalTime.of(10, 0));
     }
 
+    @Transactional
     public int fetchLateCheckinsFromChat(String channelId, LocalTime since) {
         if (chatopsService == null) return 0;
 
-        ZoneId vietnamZone = ZoneId.of("Asia/Ho_Chi_Minh");
-        LocalDateTime now = LocalDateTime.now(vietnamZone);
-        String todayString = now.format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-
-        long timestamp = now.toLocalDate().atTime(since).atZone(vietnamZone).toEpochSecond() * 1000;
+        LocalDateTime now = LocalDateTime.now(VIETNAM_ZONE);
+        String todayString = now.format(REPORT_DATE_FORMATTER);
+        long timestamp = now.toLocalDate().atTime(since).atZone(VIETNAM_ZONE).toEpochSecond() * 1000;
 
         Map<String, Object> response;
         try {
@@ -194,8 +258,9 @@ public class LateRecordService {
         }
 
         List<String> matchedMessages = posts.values().stream()
-                .map(post -> (String) ((Map<String, Object>) post).get("message"))
-                .filter(message -> message != null && message.contains("THÔNG BÁO DANH SÁCH ĐI LÀM MUỘN " + todayString))
+                .map(post -> (Map<String, Object>) post)
+                .map(post -> (String) post.get("message"))
+                .filter(message -> message != null && message.contains(todayString) && message.contains("|"))
                 .toList();
 
         if (matchedMessages.isEmpty()) {
@@ -213,42 +278,39 @@ public class LateRecordService {
     List<LateRecord> parseLateRecords(String rawMessage) {
         List<LateRecord> lateRecords = new ArrayList<>();
 
-        Pattern datePattern = Pattern.compile("THÔNG BÁO DANH SÁCH ĐI LÀM MUỘN (\\d{4}/\\d{2}/\\d{2})");
-        Matcher dateMatcher = datePattern.matcher(rawMessage);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+        Matcher dateMatcher = REPORT_DATE_PATTERN.matcher(rawMessage);
+        LocalDate reportDate = dateMatcher.find()
+                ? LocalDate.parse(dateMatcher.group(1), REPORT_DATE_FORMATTER)
+                : LocalDate.now(VIETNAM_ZONE);
 
-        LocalDate reportDate = dateMatcher.find() ? LocalDate.parse(dateMatcher.group(1), formatter) : LocalDate.now();
-
-        Pattern tablePattern = Pattern.compile("\\|(.*?)\\|\\s(.*?)\\|");
-        Matcher tableMatcher = tablePattern.matcher(rawMessage);
-
+        Matcher tableMatcher = TABLE_PATTERN.matcher(rawMessage);
         while (tableMatcher.find()) {
-            String name = tableMatcher.group(1).trim();
-            String checkinAt = tableMatcher.group(2).trim();
+            String name = normalizeWhitespace(tableMatcher.group(1));
+            String checkinAt = normalizeWhitespace(tableMatcher.group(2));
 
-            if (name.equalsIgnoreCase("NAME") || checkinAt.equalsIgnoreCase("CHECKIN AT")) {
+            if (isHeaderRow(name, checkinAt) || isSeparatorRow(name, checkinAt) || isExcludedCheckinValue(checkinAt)) {
                 continue;
             }
 
-            if (checkinAt.contains("(Có đơn NP)") || checkinAt.equalsIgnoreCase("Nghỉ phép")) {
-                continue;
-            }
-
-            Optional<User> userOpt = userRepository.findByFullName(name);
+            Optional<User> userOpt = findUserByFullName(name);
             if (userOpt.isEmpty()) {
                 log.warn("User not found with fullName: {}", name);
                 continue;
             }
-            User user = userOpt.get();
 
             LocalTime checkinTime = parseTime(checkinAt);
+            boolean missingCheckin = isMissingCheckinValue(checkinAt);
             int minutesLate = calculateMinutesLate(checkinTime);
 
             LateRecord late = new LateRecord();
-            late.setUser(user);
+            late.setUser(userOpt.get());
             late.setRecordDate(reportDate);
             late.setMinutesLate(minutesLate);
-            late.setReason("Auto-detected late check-in at " + (checkinTime != null ? checkinTime.toString() : checkinAt));
+            late.setReason(missingCheckin
+                    ? "Did not check in"
+                    : "Auto-detected late check-in at " + (checkinTime != null ? checkinTime : checkinAt));
+            late.setStatus(LateRecordStatus.FIRST_TIME);
+            late.setFineAmount(0);
             lateRecords.add(late);
         }
 
@@ -266,55 +328,223 @@ public class LateRecordService {
         LocalDate date = lateData.get(0).getRecordDate();
         lateRecordRepository.deleteByRecordDate(date);
         lateRecordRepository.flush();
-        lateRecordRepository.saveAll(lateData);
+        List<LateRecord> savedRecords = lateRecordRepository.saveAll(lateData);
 
-        processRepeatOffenders();
+        Set<Long> userIds = savedRecords.stream()
+                .map(record -> record.getUser().getId())
+                .collect(Collectors.toCollection(HashSet::new));
+        YearMonth month = YearMonth.from(date);
+        userIds.forEach(userId -> normalizeUserMonthStatuses(userId, month));
+
+        processRepeatOffenders(date);
         log.info("Saved {} late records for date {}", lateData.size(), date);
         return lateData.size();
     }
 
-    void processRepeatOffenders() {
-        LocalDate today = LocalDate.now();
-        var monthStart = today.withDayOfMonth(1);
-        var monthEnd = today.withDayOfMonth(today.lengthOfMonth());
+    void processRepeatOffenders(LocalDate targetDate) {
+        var monthStart = targetDate.withDayOfMonth(1);
+        var monthEnd = targetDate.withDayOfMonth(targetDate.lengthOfMonth());
 
-        var todayRecords = lateRecordRepository.findByRecordDate(today);
-        var processedUserIds = new java.util.HashSet<Long>();
+        var dateRecords = lateRecordRepository.findByRecordDate(targetDate);
+        var processedUserIds = new HashSet<Long>();
 
-        for (LateRecord record : todayRecords) {
+        for (LateRecord record : dateRecords) {
             Long userId = record.getUser().getId();
             if (!processedUserIds.add(userId)) continue;
 
-            var userMonthRecords = lateRecordRepository
-                    .findByUser_IdAndRecordDateBetween(userId, monthStart, monthEnd);
-            if (userMonthRecords.size() >= 2) {
+            var userMonthRecords = lateRecordRepository.findByUser_IdAndRecordDateBetween(userId, monthStart, monthEnd);
+            long countedTimes = userMonthRecords.stream()
+                    .filter(monthRecord -> monthRecord.getStatus() != LateRecordStatus.IGNORE)
+                    .count();
+            if (countedTimes >= 2) {
                 pointRuleRepository.findByActionCode("LATE_PENALTY")
                         .ifPresent(rule -> {
                             applyLatePenalty(record.getUser(), rule, record);
                             log.info("Applied late penalty to user {} for repeat offenses ({} times this month)",
-                                    record.getUser().getFullName(), userMonthRecords.size());
+                                    record.getUser().getFullName(), countedTimes);
                         });
             }
         }
     }
 
+    private boolean isHeaderRow(String name, String checkinAt) {
+        String normalizedName = normalizeForComparison(name);
+        String normalizedCheckin = normalizeForComparison(checkinAt);
+        return normalizedName.equals("name")
+                || normalizedCheckin.equals("checkin at")
+                || normalizedName.equals("employee")
+                || normalizedName.equals("member");
+    }
+
+    private boolean isSeparatorRow(String name, String checkinAt) {
+        String normalizedName = normalizeWhitespace(name).replace(" ", "");
+        String normalizedCheckin = normalizeWhitespace(checkinAt).replace(" ", "");
+        return SEPARATOR_PATTERN.matcher(normalizedName).matches()
+                && SEPARATOR_PATTERN.matcher(normalizedCheckin).matches();
+    }
+
+    private boolean isExcludedCheckinValue(String checkinAt) {
+        String normalized = normalizeForComparison(checkinAt);
+        return normalized.contains("nghi")
+                || normalized.contains("off")
+                || normalized.contains("np")
+                || normalized.contains("xin phep");
+    }
+
+    private boolean isMissingCheckinValue(String checkinAt) {
+        String normalized = normalizeWhitespace(checkinAt);
+        return normalized.isBlank() || SEPARATOR_PATTERN.matcher(normalized).matches();
+    }
+
     private LocalTime parseTime(String time) {
         if (time == null || time.isEmpty()) return null;
-        try {
-            return LocalTime.parse(time);
-        } catch (DateTimeParseException e) {
-            log.warn("Cannot parse time: {}", time);
-            return null;
+        String trimmed = time.trim();
+        if (SEPARATOR_PATTERN.matcher(trimmed).matches()) return null;
+        Matcher matcher = TIME_PATTERN.matcher(trimmed);
+        if (matcher.find()) {
+            trimmed = matcher.group();
         }
+        List<DateTimeFormatter> formatters = List.of(
+                DateTimeFormatter.ofPattern("H:mm"),
+                DateTimeFormatter.ofPattern("HH:mm"),
+                DateTimeFormatter.ofPattern("H:mm:ss"),
+                DateTimeFormatter.ofPattern("HH:mm:ss")
+        );
+        for (DateTimeFormatter formatter : formatters) {
+            try {
+                return LocalTime.parse(trimmed, formatter);
+            } catch (DateTimeParseException ignored) {
+                // try next formatter
+            }
+        }
+        log.warn("Cannot parse time: {}", time);
+        return null;
+    }
+
+    private Optional<User> findUserByFullName(String fullName) {
+        return userRepository.findByFullName(fullName)
+                .or(() -> userRepository.findByFullNameIgnoreCase(fullName));
+    }
+
+    private String normalizeWhitespace(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().replaceAll("\\s+", " ");
+    }
+
+    private String normalizeForComparison(String value) {
+        String normalized = normalizeWhitespace(value)
+                .replace('\u0110', 'D')
+                .replace('\u0111', 'd');
+        normalized = Normalizer.normalize(normalized, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "");
+        return normalized.toLowerCase(Locale.ROOT);
     }
 
     private int calculateMinutesLate(LocalTime checkinTime) {
         if (checkinTime == null) return 0;
         LocalTime threshold = LocalTime.of(8, 0);
         if (checkinTime.isAfter(threshold)) {
-            return (int) java.time.Duration.between(threshold, checkinTime).toMinutes();
+            return (int) Duration.between(threshold, checkinTime).toMinutes();
         }
         return 0;
+    }
+
+    private boolean isChargeableAfterStatusChange(LateRecord targetRecord, LateRecordStatus nextStatus) {
+        LocalDate recordDate = targetRecord.getRecordDate();
+        YearMonth month = YearMonth.from(recordDate);
+        LocalDate monthStart = month.atDay(1);
+        LocalDate monthEnd = month.atEndOfMonth();
+        List<LateRecord> monthRecords = new ArrayList<>(lateRecordRepository.findByUser_IdAndRecordDateBetween(
+                targetRecord.getUser().getId(), monthStart, monthEnd));
+
+        monthRecords.sort(Comparator
+                .comparing(LateRecord::getRecordDate)
+                .thenComparing(LateRecord::getId));
+
+        int counted = 0;
+        for (LateRecord record : monthRecords) {
+            LateRecordStatus effectiveStatus = record.getId().equals(targetRecord.getId())
+                    ? nextStatus
+                    : normalizeNullStatus(record.getStatus());
+            if (effectiveStatus == LateRecordStatus.IGNORE) {
+                continue;
+            }
+            counted++;
+            if (record.getId().equals(targetRecord.getId())) {
+                return counted >= 2;
+            }
+        }
+        return false;
+    }
+
+    @Transactional
+    void normalizeUserMonthStatuses(Long userId, YearMonth month) {
+        LocalDate monthStart = month.atDay(1);
+        LocalDate monthEnd = month.atEndOfMonth();
+        List<LateRecord> records = new ArrayList<>(lateRecordRepository.findByUser_IdAndRecordDateBetween(userId, monthStart, monthEnd));
+        if (records.isEmpty()) {
+            return;
+        }
+
+        records.sort(Comparator
+                .comparing(LateRecord::getRecordDate)
+                .thenComparing(LateRecord::getId));
+
+        int counted = 0;
+        List<LateRecord> changedRecords = new ArrayList<>();
+        for (LateRecord record : records) {
+            LateRecordStatus status = normalizeNullStatus(record.getStatus());
+            if (status == LateRecordStatus.IGNORE) {
+                if (!Integer.valueOf(0).equals(record.getFineAmount())) {
+                    record.setFineAmount(0);
+                    changedRecords.add(record);
+                }
+                continue;
+            }
+
+            counted++;
+            if (counted == 1) {
+                if (status != LateRecordStatus.FIRST_TIME || !Integer.valueOf(0).equals(record.getFineAmount())) {
+                    record.setStatus(LateRecordStatus.FIRST_TIME);
+                    record.setFineAmount(0);
+                    changedRecords.add(record);
+                }
+                continue;
+            }
+
+            LateRecordStatus nextStatus = (status == LateRecordStatus.PAID)
+                    ? LateRecordStatus.PAID
+                    : LateRecordStatus.UNPAID;
+            if (status != nextStatus || !Integer.valueOf(FINE_PER_REPEAT_LATE).equals(record.getFineAmount())) {
+                record.setStatus(nextStatus);
+                record.setFineAmount(FINE_PER_REPEAT_LATE);
+                changedRecords.add(record);
+            }
+        }
+
+        if (!changedRecords.isEmpty()) {
+            lateRecordRepository.saveAll(changedRecords);
+        }
+    }
+
+    private LateRecordStatus normalizeNullStatus(LateRecordStatus status) {
+        return status != null ? status : LateRecordStatus.FIRST_TIME;
+    }
+
+    private boolean isCurrentUserAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getAuthorities().stream().anyMatch(authority ->
+                "ROLE_ADMIN".equals(authority.getAuthority()));
+    }
+
+    private void ensureAdminCanManageStatus() {
+        if (!isCurrentUserAdmin()) {
+            throw new AccessDeniedException("Only admins can update late status.");
+        }
     }
 
     // ---- private helpers ----
@@ -330,13 +560,17 @@ public class LateRecordService {
     }
 
     private LateRecordResponse toResponse(LateRecord record) {
+        LateRecordStatus status = normalizeNullStatus(record.getStatus());
         return new LateRecordResponse(
                 record.getId(),
                 record.getUser().getId(),
                 record.getUser().getFullName(),
                 record.getRecordDate(),
                 record.getMinutesLate(),
-                record.getReason()
+                record.getReason(),
+                status,
+                record.getFineAmount() != null ? record.getFineAmount() : 0,
+                status == LateRecordStatus.UNPAID || status == LateRecordStatus.PAID
         );
     }
 

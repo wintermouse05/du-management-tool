@@ -4,8 +4,10 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.example.dumanagementbackend.entity.LateRecord;
+import org.example.dumanagementbackend.entity.enums.LateRecordStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,4 +29,9 @@ public interface LateRecordRepository extends JpaRepository<LateRecord, Long> {
     List<LateRecord> findByRecordDate(LocalDate date);
 
     List<LateRecord> findByUser_IdAndRecordDateBetween(Long userId, LocalDate startDate, LocalDate endDate);
+
+    @EntityGraph(attributePaths = "user")
+    List<LateRecord> findByRecordDateBetweenAndStatus(LocalDate startDate, LocalDate endDate, LateRecordStatus status);
+
+    long countByUser_IdAndRecordDateBetweenAndStatusNot(Long userId, LocalDate startDate, LocalDate endDate, LateRecordStatus status);
 }

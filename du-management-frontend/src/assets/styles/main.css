@@ -204,6 +204,7 @@ small,
 
 .p-inputtext,
 .p-select,
+.p-multiselect,
 .p-datepicker,
 .p-textarea {
   border-radius: var(--radius-md) !important;
@@ -213,8 +214,17 @@ small,
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast) !important;
 }
 
+/* Ensure InputText and Select have the same height when side by side */
+.p-inputtext,
+.p-select,
+.p-multiselect {
+  min-height: 42px !important;
+  box-sizing: border-box !important;
+}
+
 .p-inputtext:focus,
 .p-select:focus,
+.p-multiselect.p-focus,
 .p-textarea:focus {
   border-color: var(--theme-blue) !important;
   box-shadow: 0 0 0 2px rgba(27, 97, 201, 0.15) !important;
@@ -351,6 +361,19 @@ small,
   font-weight: 600;
   color: var(--theme-text-secondary);
   letter-spacing: 0.08px;
+}
+
+.form-field label.required::after {
+  content: ' *';
+  color: var(--theme-danger, #e53e3e);
+  font-weight: 700;
+}
+
+.form-field label .optional-hint {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--theme-text-weak);
+  margin-left: 4px;
 }
 
 .form-field-full {
@@ -653,6 +676,7 @@ small,
 /* Inputs */
 [data-theme="dark"] .p-inputtext,
 [data-theme="dark"] .p-select,
+[data-theme="dark"] .p-multiselect,
 [data-theme="dark"] .p-datepicker,
 [data-theme="dark"] .p-textarea {
   background: var(--theme-surface-light) !important;
@@ -667,12 +691,14 @@ small,
 
 [data-theme="dark"] .p-inputtext:focus,
 [data-theme="dark"] .p-select:focus,
+[data-theme="dark"] .p-multiselect.p-focus,
 [data-theme="dark"] .p-textarea:focus {
   border-color: var(--theme-blue) !important;
   box-shadow: 0 0 0 2px rgba(77, 142, 240, 0.20) !important;
 }
 
 [data-theme="dark"] .p-select-overlay,
+[data-theme="dark"] .p-multiselect-overlay,
 [data-theme="dark"] .p-datepicker-panel,
 [data-theme="dark"] .p-autocomplete-overlay {
   background: var(--theme-surface) !important;
@@ -681,14 +707,42 @@ small,
 }
 
 [data-theme="dark"] .p-select-option:hover,
+[data-theme="dark"] .p-multiselect-option:hover,
 [data-theme="dark"] .p-autocomplete-option:hover {
   background: var(--theme-bg-hover) !important;
 }
 
 [data-theme="dark"] .p-select-option.p-select-option-selected,
-[data-theme="dark"] .p-select-option.p-highlight {
+[data-theme="dark"] .p-select-option.p-highlight,
+[data-theme="dark"] .p-multiselect-option.p-multiselect-option-selected,
+[data-theme="dark"] .p-multiselect-option.p-highlight {
   background: var(--theme-blue-light) !important;
   color: var(--theme-blue) !important;
+}
+
+[data-theme="dark"] .p-multiselect-label,
+[data-theme="dark"] .p-multiselect-option,
+[data-theme="dark"] .p-multiselect-empty-message {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-theme="dark"] .p-multiselect-header {
+  background: var(--theme-surface) !important;
+  border-bottom: 1px solid var(--theme-divider) !important;
+}
+
+[data-theme="dark"] .p-multiselect-filter-container .p-icon {
+  color: var(--theme-text-weak) !important;
+}
+
+[data-theme="dark"] .p-multiselect-option .p-checkbox .p-checkbox-box {
+  background: var(--theme-surface-light) !important;
+  border-color: var(--theme-border) !important;
+}
+
+[data-theme="dark"] .p-multiselect-option .p-checkbox.p-highlight .p-checkbox-box {
+  background: var(--theme-blue) !important;
+  border-color: var(--theme-blue) !important;
 }
 
 /* Menu / Dropdown */
@@ -830,6 +884,7 @@ small,
 
   [data-theme="auto"] .p-inputtext,
   [data-theme="auto"] .p-select,
+  [data-theme="auto"] .p-multiselect,
   [data-theme="auto"] .p-datepicker,
   [data-theme="auto"] .p-textarea {
     background: var(--theme-surface-light) !important;
@@ -844,12 +899,14 @@ small,
 
   [data-theme="auto"] .p-inputtext:focus,
   [data-theme="auto"] .p-select:focus,
+  [data-theme="auto"] .p-multiselect.p-focus,
   [data-theme="auto"] .p-textarea:focus {
     border-color: var(--theme-blue) !important;
     box-shadow: 0 0 0 2px rgba(77, 142, 240, 0.20) !important;
   }
 
   [data-theme="auto"] .p-select-overlay,
+  [data-theme="auto"] .p-multiselect-overlay,
   [data-theme="auto"] .p-datepicker-panel,
   [data-theme="auto"] .p-autocomplete-overlay {
     background: var(--theme-surface) !important;
@@ -858,14 +915,42 @@ small,
   }
 
   [data-theme="auto"] .p-select-option:hover,
+  [data-theme="auto"] .p-multiselect-option:hover,
   [data-theme="auto"] .p-autocomplete-option:hover {
     background: var(--theme-bg-hover) !important;
   }
 
   [data-theme="auto"] .p-select-option.p-select-option-selected,
-  [data-theme="auto"] .p-select-option.p-highlight {
+  [data-theme="auto"] .p-select-option.p-highlight,
+  [data-theme="auto"] .p-multiselect-option.p-multiselect-option-selected,
+  [data-theme="auto"] .p-multiselect-option.p-highlight {
     background: var(--theme-blue-light) !important;
     color: var(--theme-blue) !important;
+  }
+
+  [data-theme="auto"] .p-multiselect-label,
+  [data-theme="auto"] .p-multiselect-option,
+  [data-theme="auto"] .p-multiselect-empty-message {
+    color: var(--theme-text-primary) !important;
+  }
+
+  [data-theme="auto"] .p-multiselect-header {
+    background: var(--theme-surface) !important;
+    border-bottom: 1px solid var(--theme-divider) !important;
+  }
+
+  [data-theme="auto"] .p-multiselect-filter-container .p-icon {
+    color: var(--theme-text-weak) !important;
+  }
+
+  [data-theme="auto"] .p-multiselect-option .p-checkbox .p-checkbox-box {
+    background: var(--theme-surface-light) !important;
+    border-color: var(--theme-border) !important;
+  }
+
+  [data-theme="auto"] .p-multiselect-option .p-checkbox.p-highlight .p-checkbox-box {
+    background: var(--theme-blue) !important;
+    border-color: var(--theme-blue) !important;
   }
 
   [data-theme="auto"] .p-menu {

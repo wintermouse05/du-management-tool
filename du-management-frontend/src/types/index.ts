@@ -7,6 +7,21 @@ export enum UserStatus {
   INACTIVE = 'INACTIVE',
 }
 
+export enum MemberSkillType {
+  BACKEND_DEVELOPER = 'BACKEND_DEVELOPER',
+  BUSINESS_ANALYST = 'BUSINESS_ANALYST',
+  DEVOPS_ENGINEER = 'DEVOPS_ENGINEER',
+  FLUTTER_DEVELOPER = 'FLUTTER_DEVELOPER',
+  FRONTEND_DEVELOPER = 'FRONTEND_DEVELOPER',
+  PROJECT_MANAGER = 'PROJECT_MANAGER',
+  QA_ENGINEER = 'QA_ENGINEER',
+  QUALITY_CONTROL = 'QUALITY_CONTROL',
+  TEAM_LEAD = 'TEAM_LEAD',
+  TECH_LEAD = 'TECH_LEAD',
+  UI_UX_DESIGNER = 'UI_UX_DESIGNER',
+  XAMARIN_DEVELOPER = 'XAMARIN_DEVELOPER',
+}
+
 export enum RsvpStatus {
   YES = 'YES',
   NO = 'NO',
@@ -14,9 +29,8 @@ export enum RsvpStatus {
 }
 
 export enum SeminarStatus {
-  PROPOSED = 'PROPOSED',
+  PENDING = 'PENDING',
   APPROVED = 'APPROVED',
-  SCHEDULED = 'SCHEDULED',
   DONE = 'DONE',
 }
 
@@ -29,6 +43,39 @@ export enum OrderSessionStatus {
 export enum VoteType {
   UPVOTE = 'UPVOTE',
   DOWNVOTE = 'DOWNVOTE',
+}
+
+export enum ChatopsChannelPurpose {
+  LATE_INPUT = 'LATE_INPUT',
+  NOTIFICATION_OUTPUT = 'NOTIFICATION_OUTPUT',
+}
+
+export enum LateRecordStatus {
+  FIRST_TIME = 'FIRST_TIME',
+  UNPAID = 'UNPAID',
+  PAID = 'PAID',
+  IGNORE = 'IGNORE',
+}
+
+export enum SystemLogCategory {
+  DATABASE = 'DATABASE',
+  BACKEND_LOG = 'BACKEND_LOG',
+  HTTP_REQUEST = 'HTTP_REQUEST',
+  EXTERNAL_API = 'EXTERNAL_API',
+  MESSAGE = 'MESSAGE',
+  TASK = 'TASK',
+}
+
+export enum SystemLogSeverity {
+  INFO = 'INFO',
+  WARN = 'WARN',
+  ERROR = 'ERROR',
+}
+
+export enum SystemLogStatus {
+  SUCCESS = 'SUCCESS',
+  FAILED = 'FAILED',
+  SKIPPED = 'SKIPPED',
 }
 
 // ============================================================
@@ -50,7 +97,52 @@ export interface Page<T> {
 export interface Pageable {
   page?: number
   size?: number
-  sort?: string
+  sort?: string | string[]
+}
+
+export interface SystemLogSearchParams extends Pageable {
+  q?: string
+  category?: string
+  severity?: SystemLogSeverity
+  status?: SystemLogStatus
+  source?: string
+  actor?: string
+  correlationId?: string
+  from?: string
+  to?: string
+}
+
+export interface SystemLogListResponse {
+  id: number
+  occurredAt: string
+  category: SystemLogCategory
+  severity: SystemLogSeverity
+  status: SystemLogStatus
+  action: string | null
+  source: string | null
+  actorUsername: string | null
+  correlationId: string | null
+  targetType: string | null
+  targetId: string | null
+  durationMs: number | null
+  message: string | null
+  exceptionClass: string | null
+}
+
+export interface SystemLogDetailResponse extends SystemLogListResponse {
+  detailsJson: string | null
+  stackTrace: string | null
+}
+
+export interface SystemLogSettingsResponse {
+  retentionDays: number
+  defaultRetentionDays: number
+  minRetentionDays: number
+  maxRetentionDays: number
+}
+
+export interface SystemLogSettingsUpdateRequest {
+  retentionDays: number
 }
 
 // ============================================================
@@ -77,6 +169,31 @@ export interface ForgotPasswordRequest {
 export interface ResetPasswordRequest {
   token: string
   newPassword: string
+}
+
+export interface AccountResponse {
+  id: number
+  username: string
+  email: string
+  fullName: string
+  roleName: string
+  dob: string | null
+  joinDate: string | null
+  tenureMonths: number | null
+  totalPoints: number
+  status: UserStatus
+}
+
+export interface AccountProfileUpdateRequest {
+  fullName: string
+  dob?: string | null
+  joinDate?: string | null
+}
+
+export interface AccountPasswordChangeRequest {
+  currentPassword: string
+  newPassword: string
+  confirmNewPassword: string
 }
 
 export interface GroupRequest {
@@ -121,6 +238,12 @@ export interface MemberRequest {
   dob?: string | null
   joinDate?: string | null
   status?: UserStatus
+  skills?: MemberSkillRequest[]
+}
+
+export interface MemberSkillRequest {
+  skill: MemberSkillType
+  level: number
 }
 
 export interface MemberResponse {
@@ -135,6 +258,13 @@ export interface MemberResponse {
   tenureMonths: number | null
   totalPoints: number
   status: UserStatus
+  skills: MemberSkillResponse[]
+}
+
+export interface MemberSkillResponse {
+  skill: MemberSkillType
+  skillLabel: string
+  level: number
 }
 
 // ============================================================
@@ -154,6 +284,8 @@ export interface EventResponse {
   eventDate: string
   location: string | null
   description: string | null
+  creator: string
+  creatorUsername: string | null
 }
 
 export interface EventAttendanceRequest {
@@ -177,7 +309,7 @@ export interface SeminarRequest {
   speakerId?: number | null
   title: string
   description?: string
-  scheduledAt?: string | null
+  scheduledAt: string
   status?: SeminarStatus
 }
 
@@ -190,6 +322,7 @@ export interface SeminarResponse {
   scheduledAt: string | null
   materialsUrl: string | null
   status: SeminarStatus
+  currentUserVote: VoteType | null
 }
 
 export interface SeminarVoteRequest {
@@ -200,7 +333,13 @@ export interface SeminarVoteRequest {
 export interface SeminarVoteResponse {
   seminarId: number
   userId: number
+  fullName: string
   voteType: VoteType
+}
+
+export interface SeminarVoteSummaryResponse {
+  upvotes: number
+  downvotes: number
 }
 
 // ============================================================
@@ -226,15 +365,29 @@ export interface MenuItemResponse {
   restaurantId: number
 }
 
+export interface MenuScrapeResponse {
+  restaurantName: string | null
+  items: MenuScrapeItemResponse[]
+}
+
 export interface OrderSessionRequest {
+  name: string
+  restaurantId: number
   status?: OrderSessionStatus
   deadline: string
 }
 
 export interface OrderSessionResponse {
   id: number
+  name: string
   status: OrderSessionStatus
   deadline: string
+  restaurantId: number | null
+  restaurantName: string | null
+  creatorName: string
+  creatorUsername: string | null
+  canManage: boolean
+  createdAt: string | null
 }
 
 export interface UserOrderRequest {
@@ -246,16 +399,36 @@ export interface UserOrderRequest {
   paid?: boolean
 }
 
+export interface UserOrderBulkRequest {
+  sessionId: number
+  userIds: number[]
+  itemId: number
+  quantity: number
+  note?: string
+  paid?: boolean
+}
+
+export interface UserOrderUpdateRequest {
+  itemId: number
+  quantity: number
+  note?: string
+}
+
 export interface UserOrderResponse {
   id: number
   sessionId: number
+  sessionName: string
+  sessionStatus: OrderSessionStatus
   userId: number
   fullName: string
+  orderedByFullName: string | null
   itemId: number
   itemName: string
+  itemPrice: number
   quantity: number
   note: string | null
   paid: boolean
+  canManage: boolean
 }
 
 export interface OrderItemSummaryResponse {
@@ -306,10 +479,45 @@ export interface SurveyCompletionRequest {
   completed: boolean
 }
 
+export interface SurveyAssignmentUpdateRequest {
+  userIds: number[]
+}
+
+export interface SurveyAssignmentStatusResponse {
+  userId: number
+  fullName: string
+  completed: boolean
+}
+
 export interface SurveyProgressResponse {
   surveyId: number
   totalAssigned: number
   completedCount: number
+  assignments: SurveyAssignmentStatusResponse[]
+}
+
+// ============================================================
+// Bookmark DTOs
+// ============================================================
+
+export interface BookmarkRequest {
+  title: string
+  url: string
+  description?: string
+  category?: string
+  pinned?: boolean
+}
+
+export interface BookmarkResponse {
+  id: number
+  title: string
+  url: string
+  description: string | null
+  category: string | null
+  pinned: boolean
+  createdBy: string | null
+  updatedAt: string | null
+  updatedBy: string | null
 }
 
 // ============================================================
@@ -369,6 +577,9 @@ export interface LateRecordResponse {
   recordDate: string
   minutesLate: number
   reason: string | null
+  status: LateRecordStatus
+  fineAmount: number
+  payable: boolean
 }
 
 export interface LateSummaryResponse {
@@ -407,6 +618,7 @@ export interface LuckyDrawPrizeResponse {
   sessionName: string
   prizeName: string
   quantity: number
+  drawnCount: number
 }
 
 export interface LuckyDrawWinnerRequest {
@@ -507,11 +719,50 @@ export interface NotificationChannelResponse {
   enabled: boolean
 }
 
+export interface ChatopsChannelConfigUpsertRequest {
+  token?: string
+  channelUrl: string
+}
+
+export interface ChatopsChannelConfigResponse {
+  id: number | null
+  purpose: ChatopsChannelPurpose
+  channelUrl: string | null
+  channelId: string | null
+  tokenConfigured: boolean
+  tokenMasked: string | null
+  updatedAt: string | null
+}
+
+export type ChatopsLeaveRequestType = 'WFH' | 'OFF'
+
+export interface ChatopsLeaveRequestResponse {
+  postId: string | null
+  userId: string | null
+  requesterName: string
+  type: ChatopsLeaveRequestType
+  requestedDate: string
+  postedAt: string
+  message: string
+  matchedText: string
+}
+
+export interface ChatopsLeaveRequestSummaryResponse {
+  date: string
+  fetchedAt: string
+  chatopsEnabled: boolean
+  errorMessage: string | null
+  total: number
+  wfhCount: number
+  offCount: number
+  requests: ChatopsLeaveRequestResponse[]
+}
+
 // ============================================================
 // Notification Schedule DTOs
 // ============================================================
 
-export type NotificationScheduleType = 'LATE' | 'EVENT' | 'BIRTHDAY' | 'ANNIVERSARY'
+export type NotificationScheduleType = 'LATE' | 'EVENT' | 'BIRTHDAY' | 'ANNIVERSARY' | 'LEADERBOARD'
 
 export interface NotificationScheduleResponse {
   id: number

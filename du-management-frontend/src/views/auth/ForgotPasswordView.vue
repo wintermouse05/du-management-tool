@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
+import { getApiErrorDetail } from '@/utils/apiError'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 
@@ -23,7 +24,7 @@ async function handleSubmit() {
     await authApi.forgotPassword({ email: email.value })
     submitted.value = true
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Something went wrong. Please try again.'
+    error.value = getApiErrorDetail(err, 'Something went wrong. Please try again.')
   } finally {
     loading.value = false
   }
@@ -234,3 +235,5 @@ async function handleSubmit() {
   .auth-header { margin-bottom: var(--space-6); }
 }
 </style>
+
+

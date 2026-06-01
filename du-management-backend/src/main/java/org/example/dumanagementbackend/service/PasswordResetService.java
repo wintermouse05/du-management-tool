@@ -40,7 +40,7 @@ public class PasswordResetService {
 
     @Transactional
     public void forgotPassword(String email) {
-        userRepository.findByEmail(email).ifPresentOrElse(
+        userRepository.findByEmailAndDeletedAtIsNull(email).ifPresentOrElse(
                 user -> {
                     String token = UUID.randomUUID().toString();
                     Instant now = Instant.now();
@@ -89,6 +89,9 @@ public class PasswordResetService {
         }
 
         User user = resetToken.getUser();
+        if (user.isDeleted()) {
+            throw new BadRequestException("Invalid or expired reset token");
+        }
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 

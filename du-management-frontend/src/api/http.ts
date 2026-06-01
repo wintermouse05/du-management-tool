@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios'
+import { getApiErrorDetail } from '@/utils/apiError'
 
 interface RetryableAxiosRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
@@ -54,15 +55,11 @@ function applyAuthData(data: RefreshResponse) {
 function clearAuthData() {
   localStorage.removeItem('token')
   localStorage.removeItem('username')
+  localStorage.removeItem('fullName')
   localStorage.removeItem('role')
   localStorage.removeItem('userId')
 
   window.dispatchEvent(new Event('du-auth-cleared'))
-}
-
-function getErrorMessage(error: AxiosError): string {
-  const responseData = error.response?.data as { message?: string } | undefined
-  return responseData?.message || 'Your session has expired. Please sign in again.'
 }
 
 async function refreshAccessToken(): Promise<string> {
@@ -118,7 +115,7 @@ http.interceptors.response.use(
   async (error: AxiosError) => {
     const status = error.response?.status
     const originalRequest = error.config as RetryableAxiosRequestConfig | undefined
-    const errorMessage = getErrorMessage(error)
+    const errorMessage = getApiErrorDetail(error, 'Your session has expired. Please sign in again.')
 
     if (status === 401 && originalRequest && !originalRequest._retry && shouldAttemptRefresh(originalRequest)) {
       originalRequest._retry = true

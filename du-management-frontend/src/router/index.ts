@@ -68,6 +68,16 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/orders/OrdersView.vue'),
       },
       {
+        path: 'bookmarks',
+        name: 'Bookmarks',
+        component: () => import('@/views/bookmarks/BookmarksView.vue'),
+      },
+      {
+        path: 'account',
+        name: 'Account',
+        component: () => import('@/views/account/AccountView.vue'),
+      },
+      {
         path: 'surveys',
         name: 'Surveys',
         component: () => import('@/views/surveys/SurveysView.vue'),
@@ -115,6 +125,12 @@ const routes: RouteRecordRaw[] = [
         path: 'notification-schedules',
         name: 'NotificationSchedules',
         component: () => import('@/views/notifications/NotificationSchedulesView.vue'),
+        meta: { roles: ['ADMIN'] },
+      },
+      {
+        path: 'logs',
+        name: 'SystemLogs',
+        component: () => import('@/views/system/SystemLogsView.vue'),
         meta: { roles: ['ADMIN'] },
       },
     ],

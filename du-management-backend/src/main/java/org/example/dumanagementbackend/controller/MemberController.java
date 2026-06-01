@@ -15,6 +15,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,26 +42,43 @@ public class MemberController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<MemberResponse>> getAll(Pageable pageable) {
-        return ResponseEntity.ok(memberService.getAll(pageable));
+    public ResponseEntity<Page<MemberResponse>> getAll(Pageable pageable, Authentication authentication) {
+        return ResponseEntity.ok(memberService.getAll(
+                pageable,
+                isCurrentUserAdminAccount(authentication),
+                isCurrentUserAdminRole(authentication)
+        ));
     }
 
     @GetMapping("/search")
     public ResponseEntity<Page<MemberResponse>> search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) UserStatus status,
-            Pageable pageable
+            Pageable pageable,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(memberService.search(q, status, pageable));
+        return ResponseEntity.ok(memberService.search(
+                q,
+                status,
+                pageable,
+                isCurrentUserAdminAccount(authentication),
+                isCurrentUserAdminRole(authentication)
+        ));
     }
 
     @GetMapping("/export")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<byte[]> export(
             @RequestParam(required = false) String q,
-            @RequestParam(required = false) UserStatus status
+            @RequestParam(required = false) UserStatus status,
+            Authentication authentication
     ) {
-        byte[] content = memberService.exportCsv(q, status);
+        byte[] content = memberService.exportCsv(
+                q,
+                status,
+                isCurrentUserAdminAccount(authentication),
+                isCurrentUserAdminRole(authentication)
+        );
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=members.csv")
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
@@ -91,5 +110,26 @@ public class MemberController {
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<MemberResponse> deactivate(@PathVariable Long id) {
         return ResponseEntity.ok(memberService.deactivate(id));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        memberService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    private boolean isCurrentUserAdminAccount(Authentication authentication) {
+        return authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getName() != null
+                && "admin".equalsIgnoreCase(authentication.getName());
+    }
+
+    private boolean isCurrentUserAdminRole(Authentication authentication) {
+        return authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 }

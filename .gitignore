@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+backend-ngrok.log
+ngrok.out.log
+ngrok.err.log
+*.log
+dist/
+target/
+.idea/
+.tools/
+*.md
+nginx/
+uploads/
+*.pid

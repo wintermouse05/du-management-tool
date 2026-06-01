@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { notificationsApi } from '@/api/notifications'
 import type { NotificationScheduleResponse } from '@/types'
+import { getApiErrorDetail } from '@/utils/apiError'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -12,6 +13,7 @@ import { useToast } from 'primevue/usetoast'
 const toast = useToast()
 const schedules = ref<NotificationScheduleResponse[]>([])
 const loading = ref(false)
+const runningLateReport = ref(false)
 
 const TIME_PATTERN = /^\d{2}:\d{2}(:\d{2})?$/
 
@@ -37,7 +39,7 @@ async function upsert(type: string) {
     toast.add({ severity: 'success', summary: `Schedule ${type} updated`, life: 2500 })
     await load()
   } catch (e: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message, life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(e), life: 3000 })
   }
 }
 
@@ -51,7 +53,24 @@ async function toggleEnabled(schedule: NotificationScheduleResponse) {
     toast.add({ severity: 'success', summary: `${schedule.type} ${schedule.enabled ? 'disabled' : 'enabled'}`, life: 2500 })
     await load()
   } catch (e: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e.response?.data?.message, life: 3000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(e), life: 3000 })
+  }
+}
+
+async function runLateReportNow() {
+  runningLateReport.value = true
+  try {
+    const response = await notificationsApi.runLatePenaltySchedule()
+    toast.add({
+      severity: response.data.sent ? 'success' : 'info',
+      summary: response.data.sent ? 'Late report sent' : 'Late report not sent',
+      detail: response.data.message,
+      life: 4000,
+    })
+  } catch (e: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(e), life: 3500 })
+  } finally {
+    runningLateReport.value = false
   }
 }
 
@@ -80,6 +99,9 @@ function updateField(schedule: NotificationScheduleResponse, field: 'sendTime' |
     </div>
     <div class="content-card">
       <DataTable :value="schedules" :loading="loading" stripedRows>
+        <template #empty>
+          No Notification Schedule found. Please configure a schedule.
+        </template>
         <Column field="type" header="Type">
           <template #body="{ data }">
             <Tag :value="data.type" :severity="data.type === 'BIRTHDAY' || data.type === 'ANNIVERSARY' ? 'success' : 'info'" />
@@ -110,14 +132,25 @@ function updateField(schedule: NotificationScheduleResponse, field: 'sendTime' |
             <Tag :value="data.enabled ? 'Enabled' : 'Disabled'" :severity="data.enabled ? 'success' : 'secondary'" />
           </template>
         </Column>
-        <Column header="Actions" style="width:130px">
+        <Column header="Actions" style="width:230px">
           <template #body="{ data }">
-            <Button
-              :label="data.enabled ? 'Disable' : 'Enable'"
-              :severity="data.enabled ? 'danger' : 'success'"
-              size="small"
-              @click="toggleEnabled(data)"
-            />
+            <div class="schedule-actions">
+              <Button
+                :label="data.enabled ? 'Disable' : 'Enable'"
+                :severity="data.enabled ? 'danger' : 'success'"
+                size="small"
+                @click="toggleEnabled(data)"
+              />
+              <Button
+                v-if="data.type === 'LATE'"
+                label="Run now"
+                icon="pi pi-send"
+                size="small"
+                outlined
+                :loading="runningLateReport"
+                @click="runLateReportNow"
+              />
+            </div>
           </template>
         </Column>
       </DataTable>
@@ -128,3 +161,14 @@ function updateField(schedule: NotificationScheduleResponse, field: 'sendTime' |
     </div>
   </div>
 </template>
+
+<style scoped>
+.schedule-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+</style>
+
+

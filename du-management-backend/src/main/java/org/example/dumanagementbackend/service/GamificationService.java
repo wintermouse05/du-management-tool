@@ -43,7 +43,8 @@ public class GamificationService {
     }
 
     public Page<PointRuleResponse> getRules(Pageable pageable) {
-        return pointRuleRepository.findAll(pageable).map(this::toRuleResponse);
+        Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
+        return pointRuleRepository.findAll(resolvedPageable).map(this::toRuleResponse);
     }
 
     @Transactional
@@ -91,15 +92,24 @@ public class GamificationService {
     }
 
     public Page<PointHistoryResponse> getUserHistory(Long userId, Pageable pageable) {
-        return pointHistoryRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable).map(this::toHistoryResponse);
+        Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
+        return pointHistoryRepository.findByUserIdOrderByCreatedAtDesc(userId, resolvedPageable).map(this::toHistoryResponse);
     }
 
     @Cacheable(
             cacheNames = "gamificationLeaderboard",
-            key = "{#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString()}"
+            key = "{#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString(),#includeAdmins}"
     )
-    public Page<LeaderboardEntryResponse> leaderboard(Pageable pageable) {
-        return userRepository.findByStatusOrderByTotalPointsDesc(UserStatus.ACTIVE, pageable)
+    public Page<LeaderboardEntryResponse> leaderboard(Pageable pageable, boolean includeAdmins) {
+        Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
+        Page<User> users = includeAdmins
+                ? userRepository.findByStatusOrderByTotalPointsDesc(UserStatus.ACTIVE, resolvedPageable)
+                : userRepository.findByStatusAndUsernameIgnoreCaseNotOrderByTotalPointsDesc(
+                        UserStatus.ACTIVE,
+                        SystemAccountUtils.ADMIN_USERNAME,
+                        resolvedPageable
+                );
+        return users
                 .map(user -> new LeaderboardEntryResponse(user.getId(), user.getFullName(), user.getTotalPoints()));
     }
 

@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { rolesApi } from '@/api/roles'
 import type { RoleResponse } from '@/types'
+import { getApiErrorDetail } from '@/utils/apiError'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -24,12 +25,12 @@ async function save() {
     if (editing.value && editId.value) await rolesApi.update(editId.value, form.value)
     else await rolesApi.create(form.value)
     toast.add({ severity:'success', summary:'Saved', life:2000 }); dialog.value = false; load()
-  } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 }) }
+  } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: getApiErrorDetail(e), life:3000 }) }
 }
 
 async function remove(id: number) {
-  try { await rolesApi.delete(id); toast.add({ severity:'warn', summary:'Role deleted', life:2000 }); load()
-  } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: e.response?.data?.message, life:3000 }) }
+  try { await rolesApi.delete(id); toast.add({ severity:'warn', summary:'Role archived', life:2000 }); load()
+  } catch (e: any) { toast.add({ severity:'error', summary:'Error', detail: getApiErrorDetail(e), life:3000 }) }
 }
 
 onMounted(load)
@@ -43,6 +44,9 @@ onMounted(load)
     </div>
     <div class="content-card">
       <DataTable :value="roles" :loading="loading" stripedRows>
+        <template #empty>
+          No Role has been created yet. Please create a new Role.
+        </template>
         <Column field="name" header="Name" /><Column field="description" header="Description" />
         <Column header="Actions" style="width:140px">
           <template #body="{data}">
@@ -54,8 +58,8 @@ onMounted(load)
     </div>
     <Dialog v-model:visible="dialog" :header="editing?'Edit Role':'Add Role'" modal :style="{width:'380px'}">
       <div style="display:flex;flex-direction:column;gap:var(--space-4);">
-        <div class="form-field"><label>Name</label><InputText v-model="form.name" fluid /></div>
-        <div class="form-field"><label>Description</label><InputText v-model="form.description" fluid /></div>
+        <div class="form-field"><label class="required">Name</label><InputText v-model="form.name" fluid /></div>
+        <div class="form-field"><label>Description <span class="optional-hint">(optional)</span></label><InputText v-model="form.description" fluid /></div>
       </div>
       <template #footer><Button label="Cancel" text @click="dialog=false" /><Button :label="editing?'Update':'Create'" icon="pi pi-check" @click="save" /></template>
     </Dialog>

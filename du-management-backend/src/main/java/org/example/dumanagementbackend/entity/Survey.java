@@ -30,4 +30,7 @@ public class Survey extends AuditableEntity {
 
     @Column(nullable = false)
     private LocalDateTime deadline;
+
+    @Column(name = "chatops_thread_id", length = 100)
+    private String chatopsThreadId;
 }

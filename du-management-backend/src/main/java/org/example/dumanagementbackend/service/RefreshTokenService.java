@@ -94,6 +94,11 @@ public class RefreshTokenService {
             throw new UnauthorizedException("Refresh token has expired");
         }
 
+        if (presentedToken.getUser().isDeleted()) {
+            revokeTokenFamily(presentedToken.getFamilyId(), "USER_ARCHIVED");
+            throw new UnauthorizedException("Refresh token is invalid");
+        }
+
         String replacementRawToken = generateRawToken();
         String replacementTokenHash = hashToken(replacementRawToken);
 
@@ -140,6 +145,14 @@ public class RefreshTokenService {
             return;
         }
         refreshTokenRepository.revokeActiveByFamilyId(familyId, Instant.now(), reason);
+    }
+
+    @Transactional
+    public void revokeActiveByUserId(Long userId, String reason) {
+        if (userId == null) {
+            return;
+        }
+        refreshTokenRepository.revokeActiveByUserId(userId, Instant.now(), reason);
     }
 
     public String extractRefreshToken(HttpServletRequest request) {

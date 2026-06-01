@@ -11,9 +11,12 @@ export const useMenuScrapeStore = defineStore('menuScrape', () => {
   const scrapedItems = ref<MenuScrapeItemResponse[]>([])
   const restaurantName = ref('')
 
-  function setResults(url: string, items: MenuScrapeItemResponse[]) {
+  function setResults(url: string, items: MenuScrapeItemResponse[], parsedRestaurantName?: string | null) {
     scrapeUrl.value = url
     scrapedItems.value = items
+    if (parsedRestaurantName?.trim()) {
+      restaurantName.value = parsedRestaurantName.trim()
+    }
   }
 
   function clear() {

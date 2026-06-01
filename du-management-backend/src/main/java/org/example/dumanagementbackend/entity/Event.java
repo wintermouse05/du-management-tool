@@ -33,4 +33,7 @@ public class Event extends AuditableEntity {
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    @Column(name = "chatops_thread_id", length = 100)
+    private String chatopsThreadId;
 }

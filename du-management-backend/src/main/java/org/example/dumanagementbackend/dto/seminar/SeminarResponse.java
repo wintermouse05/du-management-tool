@@ -1,6 +1,7 @@
 package org.example.dumanagementbackend.dto.seminar;
 
 import org.example.dumanagementbackend.entity.enums.SeminarStatus;
+import org.example.dumanagementbackend.entity.enums.VoteType;
 import java.time.LocalDateTime;
 
 public record SeminarResponse(
@@ -11,6 +12,7 @@ public record SeminarResponse(
         String description,
         LocalDateTime scheduledAt,
         String materialsUrl,
-        SeminarStatus status
+        SeminarStatus status,
+        VoteType currentUserVote
 ) {
 }

@@ -21,10 +21,12 @@ public class ScheduleStartupRunner {
     private static final Logger log = LoggerFactory.getLogger(ScheduleStartupRunner.class);
 
     private final NotificationScheduleRepository scheduleRepository;
+    private final NotificationScheduleService notificationScheduleService;
     private final ScheduleManager scheduleManager;
 
     @EventListener(ApplicationReadyEvent.class)
     public void onReady() {
+        notificationScheduleService.ensureDefaultSchedules();
         List<NotificationSchedule> schedules = scheduleRepository.findByEnabledTrue();
         for (NotificationSchedule schedule : schedules) {
             try {
