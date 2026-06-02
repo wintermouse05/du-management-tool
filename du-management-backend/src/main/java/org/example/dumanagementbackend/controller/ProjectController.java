@@ -2,6 +2,7 @@ package org.example.dumanagementbackend.controller;
 
 import java.util.List;
 
+import org.example.dumanagementbackend.dto.project.ProjectAvailabilitySummaryResponse;
 import org.example.dumanagementbackend.dto.project.ProjectMemberRequest;
 import org.example.dumanagementbackend.dto.project.ProjectMemberResponse;
 import org.example.dumanagementbackend.dto.project.ProjectRequest;
@@ -37,6 +38,11 @@ public class ProjectController {
     @GetMapping
     public ResponseEntity<Page<ProjectResponse>> getAll(Pageable pageable) {
         return ResponseEntity.ok(projectService.getAll(pageable));
+    }
+
+    @GetMapping("/availability-summary")
+    public ResponseEntity<ProjectAvailabilitySummaryResponse> getAvailabilitySummary() {
+        return ResponseEntity.ok(projectService.getAvailabilitySummary());
     }
 
     @PostMapping

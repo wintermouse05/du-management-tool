@@ -7,11 +7,12 @@ import { eventsApi } from '@/api/events'
 import { surveysApi } from '@/api/surveys'
 import { gamificationApi } from '@/api/gamification'
 import { chatopsApi } from '@/api/chatops'
+import { projectsApi } from '@/api/projects'
 import type { ChatopsLeaveRequestResponse, ChatopsLeaveRequestSummaryResponse, LeaderboardEntryResponse } from '@/types'
 import { wsService } from '@/services/websocket'
 
 const auth = useAuthStore()
-const stats = ref({ members: 0, events: 0, surveys: 0 })
+const stats = ref({ members: 0, events: 0, surveys: 0, openProjects: 0, availableMembers: 0 })
 const topUsers = ref<LeaderboardEntryResponse[]>([])
 const leaveSummary = ref<ChatopsLeaveRequestSummaryResponse | null>(null)
 const leaveLoadFailed = ref(false)
@@ -22,10 +23,11 @@ const todayLeaveRequests = computed(() => leaveSummary.value?.requests || [])
 async function fetchDashboardData() {
   try {
     leaveLoadFailed.value = false
-    const [m, e, s, lb, leave] = await Promise.all([
+    const [m, e, s, projectAvailability, lb, leave] = await Promise.all([
       membersApi.getAll({ size: 1 }).catch(() => ({ data: { totalElements: 0 } })),
       eventsApi.getAll({ size: 1 }).catch(() => ({ data: { totalElements: 0 } })),
       surveysApi.getAll({ size: 1 }).catch(() => ({ data: { totalElements: 0 } })),
+      projectsApi.getAvailabilitySummary().catch(() => ({ data: { openProjectCount: 0, availableMemberCount: 0 } })),
       gamificationApi.getLeaderboard({ size: 5 }).catch(() => ({ data: { content: [] } })),
       chatopsApi.getTodayLeaveRequests().catch(() => {
         leaveLoadFailed.value = true
@@ -36,6 +38,8 @@ async function fetchDashboardData() {
       members: (m.data as any).totalElements || 0,
       events: (e.data as any).totalElements || 0,
       surveys: (s.data as any).totalElements || 0,
+      openProjects: (projectAvailability.data as any).openProjectCount || 0,
+      availableMembers: (projectAvailability.data as any).availableMemberCount || 0,
     }
     topUsers.value = (lb.data as any).content || []
     leaveSummary.value = leave?.data || null
@@ -114,6 +118,20 @@ function requesterInitial(request: ChatopsLeaveRequestResponse) {
         </div>
         <div class="stat-value">{{ stats.surveys }}</div>
         <div class="stat-label">Active Surveys</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(16,185,129,0.1); color: #059669;">
+          <i class="pi pi-briefcase"></i>
+        </div>
+        <div class="stat-value">{{ stats.openProjects }}</div>
+        <div class="stat-label">Open Projects</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(14,165,233,0.1); color: #0284c7;">
+          <i class="pi pi-user-plus"></i>
+        </div>
+        <div class="stat-value">{{ stats.availableMembers }}</div>
+        <div class="stat-label">Available Members</div>
       </div>
       <div class="stat-card">
         <div class="stat-icon" style="background: rgba(147,51,234,0.08); color: #9333ea;">

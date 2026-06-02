@@ -270,6 +270,12 @@ export interface ProjectResponse {
   taskCount: number
 }
 
+export interface ProjectAvailabilitySummaryResponse {
+  openProjectCount: number
+  availableMemberCount: number
+  generatedAt: string
+}
+
 export interface ProjectMemberRequest {
   userId: number
   projectRole: ProjectRole

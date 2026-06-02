@@ -3,9 +3,11 @@ package org.example.dumanagementbackend.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.example.dumanagementbackend.dto.project.AvailableProjectMemberResponse;
 import org.example.dumanagementbackend.dto.project.ProjectMemberRequest;
 import org.example.dumanagementbackend.dto.project.ProjectMemberResponse;
 import org.example.dumanagementbackend.dto.project.ProjectRequest;
+import org.example.dumanagementbackend.dto.project.ProjectAvailabilitySummaryResponse;
 import org.example.dumanagementbackend.dto.project.ProjectResponse;
 import org.example.dumanagementbackend.dto.project.ProjectTaskRequest;
 import org.example.dumanagementbackend.dto.project.ProjectTaskResponse;
@@ -14,6 +16,7 @@ import org.example.dumanagementbackend.entity.ProjectMember;
 import org.example.dumanagementbackend.entity.ProjectMemberId;
 import org.example.dumanagementbackend.entity.Task;
 import org.example.dumanagementbackend.entity.User;
+import org.example.dumanagementbackend.entity.enums.ProjectStatus;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
@@ -41,6 +44,20 @@ public class ProjectService {
     public Page<ProjectResponse> getAll(Pageable pageable) {
         Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
         return projectRepository.findByDeletedAtIsNull(resolvedPageable).map(this::toProjectResponse);
+    }
+
+    public ProjectAvailabilitySummaryResponse getAvailabilitySummary() {
+        LocalDateTime now = LocalDateTime.now();
+        List<AvailableProjectMemberResponse> availableMembers = getAvailableMembers(now);
+        return new ProjectAvailabilitySummaryResponse(
+                projectRepository.countCurrentlyOpenProjects(now, ProjectStatus.ACTIVE),
+                availableMembers.size(),
+                now
+        );
+    }
+
+    public List<AvailableProjectMemberResponse> getAvailableMembers() {
+        return getAvailableMembers(LocalDateTime.now());
     }
 
     public ProjectResponse getById(Long id) {
@@ -179,6 +196,17 @@ public class ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found with id=" + id));
     }
 
+    private List<AvailableProjectMemberResponse> getAvailableMembers(LocalDateTime now) {
+        return userRepository.findAvailableProjectMembers(
+                        now,
+                        UserStatus.ACTIVE,
+                        ProjectStatus.ACTIVE,
+                        SystemAccountUtils.ADMIN_USERNAME
+                ).stream()
+                .map(this::toAvailableMemberResponse)
+                .toList();
+    }
+
     private ProjectMember getProjectMember(Long projectId, Long userId) {
         return projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -295,6 +323,16 @@ public class ProjectService {
                 assignee.getFullName(),
                 task.getStartTime(),
                 task.getDeadline()
+        );
+    }
+
+    private AvailableProjectMemberResponse toAvailableMemberResponse(User user) {
+        return new AvailableProjectMemberResponse(
+                user.getId(),
+                user.getUsername(),
+                user.getFullName(),
+                user.getEmail(),
+                user.getRole() != null ? user.getRole().getName() : null
         );
     }
 }

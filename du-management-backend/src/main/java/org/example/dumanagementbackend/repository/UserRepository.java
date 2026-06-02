@@ -1,11 +1,13 @@
 package org.example.dumanagementbackend.repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 import org.example.dumanagementbackend.entity.User;
+import org.example.dumanagementbackend.entity.enums.ProjectStatus;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -186,4 +188,31 @@ public interface UserRepository extends JpaRepository<User, Long> {
              order by lateCount desc
             """)
     List<Object[]> findRepeatLateOffendersInMonth(@Param("monthStart") LocalDate monthStart, @Param("monthEnd") LocalDate monthEnd);
+
+    @Query("""
+            select u
+              from User u
+             where u.deletedAt is null
+               and u.status = :userStatus
+               and lower(u.username) <> lower(:excludedUsername)
+               and not exists (
+                    select 1
+                      from ProjectMember pm
+                      join pm.project p
+                     where pm.user = u
+                       and p.deletedAt is null
+                       and p.status = :openProjectStatus
+                       and p.startTime <= :now
+                       and p.endTime >= :now
+                       and pm.participationStartTime <= :now
+                       and pm.expectedEndTime >= :now
+               )
+             order by lower(u.fullName) asc, lower(u.username) asc
+            """)
+    List<User> findAvailableProjectMembers(
+            @Param("now") LocalDateTime now,
+            @Param("userStatus") UserStatus userStatus,
+            @Param("openProjectStatus") ProjectStatus openProjectStatus,
+            @Param("excludedUsername") String excludedUsername
+    );
 }

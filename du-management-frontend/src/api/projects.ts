@@ -4,6 +4,7 @@ import type {
   Pageable,
   ProjectMemberRequest,
   ProjectMemberResponse,
+  ProjectAvailabilitySummaryResponse,
   ProjectRequest,
   ProjectResponse,
   ProjectTaskRequest,
@@ -17,6 +18,10 @@ export const projectsApi = {
 
   getById(id: number) {
     return http.get<ProjectResponse>(`/projects/${id}`)
+  },
+
+  getAvailabilitySummary() {
+    return http.get<ProjectAvailabilitySummaryResponse>('/projects/availability-summary')
   },
 
   create(data: ProjectRequest) {

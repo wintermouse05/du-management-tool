@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.example.dumanagementbackend.dto.project.AvailableProjectMemberResponse;
+import org.example.dumanagementbackend.dto.project.ProjectAvailabilitySummaryResponse;
 import org.example.dumanagementbackend.entity.LateRecord;
 import org.example.dumanagementbackend.entity.NotificationSchedule;
 import org.example.dumanagementbackend.entity.User;
@@ -388,6 +390,47 @@ public class ChatopsNotificationService {
         }
     }
 
+    public AvailableMembersReportResult sendAvailableMembersReport(
+            ProjectAvailabilitySummaryResponse summary,
+            List<AvailableProjectMemberResponse> availableMembers
+    ) {
+        int availableCount = availableMembers != null ? availableMembers.size() : 0;
+        LocalDate today = LocalDate.now();
+        StringBuilder message = new StringBuilder();
+        message.append("**Available members report - ").append(today).append("**\n\n");
+        message.append("- Currently open projects: ")
+                .append(summary != null ? summary.openProjectCount() : 0)
+                .append("\n");
+        message.append("- Available members: ").append(availableCount).append("\n\n");
+
+        if (availableCount == 0) {
+            message.append("No active available members found.");
+        } else {
+            message.append("| Name | Email | Role |\n");
+            message.append("|------|-------|------|\n");
+            availableMembers.forEach(member -> message
+                    .append("| ").append(escapeTableValue(member.fullName())).append(" | ")
+                    .append(escapeTableValue(member.email())).append(" | ")
+                    .append(escapeTableValue(member.roleName())).append(" |\n"));
+        }
+
+        String postId = sendToChannel(message.toString());
+        boolean sent = postId != null;
+        if (sent) {
+            log.info("Available members report sent. availableMembers={}, postId={}", availableCount, postId);
+        } else {
+            log.warn("Available members report failed to send. availableMembers={}", availableCount);
+        }
+        return new AvailableMembersReportResult(sent, availableCount, postId);
+    }
+
+    public record AvailableMembersReportResult(
+            boolean sent,
+            int availableMemberCount,
+            String postId
+    ) {
+    }
+
     private String resolveScheduleChannelId(NotificationSchedule schedule) {
         if (schedule == null) {
             return chatopsService.getOutputChannelId();
@@ -406,6 +449,13 @@ public class ChatopsNotificationService {
             return user.getUsername().replace("|", "/");
         }
         return "Unknown";
+    }
+
+    private String escapeTableValue(String value) {
+        if (value == null || value.isBlank()) {
+            return "-";
+        }
+        return value.trim().replace("|", "/").replace("\n", " ");
     }
 
     private String resolveTargetChannelId(String targetChannelId) {

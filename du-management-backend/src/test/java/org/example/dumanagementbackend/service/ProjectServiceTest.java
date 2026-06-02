@@ -16,6 +16,7 @@ import java.util.Optional;
 import org.example.dumanagementbackend.dto.project.ProjectMemberRequest;
 import org.example.dumanagementbackend.dto.project.ProjectMemberResponse;
 import org.example.dumanagementbackend.dto.project.ProjectRequest;
+import org.example.dumanagementbackend.dto.project.ProjectAvailabilitySummaryResponse;
 import org.example.dumanagementbackend.dto.project.ProjectResponse;
 import org.example.dumanagementbackend.dto.project.ProjectTaskRequest;
 import org.example.dumanagementbackend.dto.project.ProjectTaskResponse;
@@ -70,6 +71,45 @@ class ProjectServiceTest {
 
         assertEquals(1, harness.lastProjectPageable.getPageNumber());
         assertEquals(10, harness.lastProjectPageable.getPageSize());
+    }
+
+    @Test
+    void getAvailabilitySummary_countsOpenProjectsAndAvailableMembers() {
+        Harness harness = new Harness();
+        LocalDateTime now = LocalDateTime.now();
+        Project openProject = buildProjectWithRange(1L, ProjectStatus.ACTIVE, now.minusDays(1), now.plusDays(1));
+        Project onHoldProject = buildProjectWithRange(2L, ProjectStatus.ON_HOLD, now.minusDays(1), now.plusDays(1));
+        Project endedProject = buildProjectWithRange(3L, ProjectStatus.ACTIVE, now.minusDays(10), now.minusDays(5));
+        harness.addProject(openProject);
+        harness.addProject(onHoldProject);
+        harness.addProject(endedProject);
+
+        User busyUser = buildUser(2L, "busy", UserStatus.ACTIVE);
+        User noProjectUser = buildUser(3L, "free", UserStatus.ACTIVE);
+        User endedParticipationUser = buildUser(4L, "ended", UserStatus.ACTIVE);
+        User onHoldProjectUser = buildUser(5L, "onhold", UserStatus.ACTIVE);
+        User endedProjectUser = buildUser(6L, "endedproject", UserStatus.ACTIVE);
+        User adminUser = buildUser(7L, "admin", UserStatus.ACTIVE);
+        User inactiveUser = buildUser(8L, "inactive", UserStatus.INACTIVE);
+        List.of(busyUser, noProjectUser, endedParticipationUser, onHoldProjectUser, endedProjectUser, adminUser, inactiveUser)
+                .forEach(harness::addUser);
+
+        harness.addProjectMember(buildMembership(openProject, busyUser, ProjectRole.BACKEND_DEVELOPER,
+                now.minusHours(1), now.plusHours(1)));
+        harness.addProjectMember(buildMembership(openProject, endedParticipationUser, ProjectRole.FRONTEND_DEVELOPER,
+                now.minusDays(2), now.minusDays(1)));
+        harness.addProjectMember(buildMembership(onHoldProject, onHoldProjectUser, ProjectRole.QA_ENGINEER,
+                now.minusHours(1), now.plusHours(1)));
+        harness.addProjectMember(buildMembership(endedProject, endedProjectUser, ProjectRole.TECH_LEAD,
+                now.minusHours(1), now.plusHours(1)));
+
+        ProjectAvailabilitySummaryResponse summary = harness.service.getAvailabilitySummary();
+
+        assertEquals(1, summary.openProjectCount());
+        assertEquals(4, summary.availableMemberCount());
+        assertEquals(List.of(4L, 6L, 3L, 5L), harness.service.getAvailableMembers().stream()
+                .map(member -> member.id())
+                .toList());
     }
 
     @Test
@@ -250,12 +290,16 @@ class ProjectServiceTest {
     }
 
     private static Project buildProject(Long id) {
+        return buildProjectWithRange(id, ProjectStatus.ACTIVE, START, END);
+    }
+
+    private static Project buildProjectWithRange(Long id, ProjectStatus status, LocalDateTime startTime, LocalDateTime endTime) {
         Project project = new Project();
         project.setId(id);
         project.setName("Apollo");
-        project.setStatus(ProjectStatus.ACTIVE);
-        project.setStartTime(START);
-        project.setEndTime(END);
+        project.setStatus(status);
+        project.setStartTime(startTime);
+        project.setEndTime(endTime);
         return project;
     }
 
@@ -275,6 +319,16 @@ class ProjectServiceTest {
     }
 
     private static ProjectMember buildMembership(Project project, User user, ProjectRole role) {
+        return buildMembership(project, user, role, START, END);
+    }
+
+    private static ProjectMember buildMembership(
+            Project project,
+            User user,
+            ProjectRole role,
+            LocalDateTime participationStartTime,
+            LocalDateTime expectedEndTime
+    ) {
         ProjectMember member = new ProjectMember();
         ProjectMemberId id = new ProjectMemberId();
         id.setProjectId(project.getId());
@@ -283,8 +337,8 @@ class ProjectServiceTest {
         member.setProject(project);
         member.setUser(user);
         member.setProjectRole(role);
-        member.setParticipationStartTime(START);
-        member.setExpectedEndTime(END);
+        member.setParticipationStartTime(participationStartTime);
+        member.setExpectedEndTime(expectedEndTime);
         return member;
     }
 
@@ -349,6 +403,9 @@ class ProjectServiceTest {
                         .anyMatch(project -> !project.isDeleted()
                                 && project.getName().equals(args[0])
                                 && !project.getId().equals(args[1]));
+                case "countCurrentlyOpenProjects" -> projects.values().stream()
+                        .filter(project -> isCurrentlyOpen(project, (LocalDateTime) args[0], (ProjectStatus) args[1]))
+                        .count();
                 case "save" -> {
                     Project project = (Project) args[0];
                     if (project.getId() == null) {
@@ -415,8 +472,33 @@ class ProjectServiceTest {
             return proxy(UserRepository.class, (method, args) -> switch (method.getName()) {
                 case "findByIdAndDeletedAtIsNull" -> Optional.ofNullable(users.get((Long) args[0]))
                         .filter(user -> !user.isDeleted());
+                case "findAvailableProjectMembers" -> users.values().stream()
+                        .filter(user -> !user.isDeleted())
+                        .filter(user -> user.getStatus() == args[1])
+                        .filter(user -> !user.getUsername().equalsIgnoreCase((String) args[3]))
+                        .filter(user -> !hasCurrentOpenParticipation(user, (LocalDateTime) args[0], (ProjectStatus) args[2]))
+                        .sorted((left, right) -> {
+                            int byName = left.getFullName().compareToIgnoreCase(right.getFullName());
+                            return byName != 0 ? byName : left.getUsername().compareToIgnoreCase(right.getUsername());
+                        })
+                        .toList();
                 default -> defaultValue(method);
             });
+        }
+
+        private boolean hasCurrentOpenParticipation(User user, LocalDateTime now, ProjectStatus openProjectStatus) {
+            return projectMembers.values().stream()
+                    .filter(member -> member.getUser().getId().equals(user.getId()))
+                    .anyMatch(member -> isCurrentlyOpen(member.getProject(), now, openProjectStatus)
+                            && !member.getParticipationStartTime().isAfter(now)
+                            && !member.getExpectedEndTime().isBefore(now));
+        }
+
+        private boolean isCurrentlyOpen(Project project, LocalDateTime now, ProjectStatus openProjectStatus) {
+            return !project.isDeleted()
+                    && project.getStatus() == openProjectStatus
+                    && !project.getStartTime().isAfter(now)
+                    && !project.getEndTime().isBefore(now);
         }
 
         private Pageable captureProjectPageable(Pageable pageable) {
