@@ -22,6 +22,37 @@ export enum MemberSkillType {
   XAMARIN_DEVELOPER = 'XAMARIN_DEVELOPER',
 }
 
+export enum ProjectRole {
+  BACKEND_DEVELOPER = 'BACKEND_DEVELOPER',
+  BUSINESS_ANALYST = 'BUSINESS_ANALYST',
+  DEVOPS_ENGINEER = 'DEVOPS_ENGINEER',
+  FLUTTER_DEVELOPER = 'FLUTTER_DEVELOPER',
+  FRONTEND_DEVELOPER = 'FRONTEND_DEVELOPER',
+  PROJECT_MANAGER = 'PROJECT_MANAGER',
+  QA_ENGINEER = 'QA_ENGINEER',
+  QUALITY_CONTROL = 'QUALITY_CONTROL',
+  TEAM_LEAD = 'TEAM_LEAD',
+  TECH_LEAD = 'TECH_LEAD',
+  UI_UX_DESIGNER = 'UI_UX_DESIGNER',
+  XAMARIN_DEVELOPER = 'XAMARIN_DEVELOPER',
+}
+
+export enum ProjectStatus {
+  PLANNED = 'PLANNED',
+  ACTIVE = 'ACTIVE',
+  ON_HOLD = 'ON_HOLD',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum TaskStatus {
+  TODO = 'TODO',
+  IN_PROGRESS = 'IN_PROGRESS',
+  BLOCKED = 'BLOCKED',
+  DONE = 'DONE',
+  CANCELLED = 'CANCELLED',
+}
+
 export enum RsvpStatus {
   YES = 'YES',
   NO = 'NO',
@@ -215,6 +246,69 @@ export interface GroupMemberResponse {
   username: string
   fullName: string
   email: string
+}
+
+// ============================================================
+// Project DTOs
+// ============================================================
+
+export interface ProjectRequest {
+  name: string
+  status: ProjectStatus
+  startTime: string
+  endTime: string
+}
+
+export interface ProjectResponse {
+  id: number
+  name: string
+  status: ProjectStatus
+  statusLabel: string
+  startTime: string
+  endTime: string
+  memberCount: number
+  taskCount: number
+}
+
+export interface ProjectMemberRequest {
+  userId: number
+  projectRole: ProjectRole
+  participationStartTime: string
+  expectedEndTime: string
+}
+
+export interface ProjectMemberResponse {
+  projectId: number
+  userId: number
+  username: string
+  fullName: string
+  email: string
+  projectRole: ProjectRole
+  projectRoleLabel: string
+  participationStartTime: string
+  expectedEndTime: string
+}
+
+export interface ProjectTaskRequest {
+  name: string
+  status: TaskStatus
+  assigneeId: number
+  startTime: string
+  deadline: string
+}
+
+export interface ProjectTaskResponse {
+  id: number
+  projectId: number
+  projectName: string
+  name: string
+  status: TaskStatus
+  statusLabel: string
+  assigneeId: number
+  assigneeUsername: string
+  assigneeFullName: string
+  startTime: string
+  deadline: string
 }
 
 export interface RegisterRequest {

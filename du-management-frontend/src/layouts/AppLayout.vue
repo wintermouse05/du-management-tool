@@ -96,6 +96,7 @@ const navSections = computed<NavSection[]>(() => {
       items: [
         { label: 'Dashboard', icon: 'pi pi-home', to: '/' },
         { label: 'Members', icon: 'pi pi-users', to: '/members' },
+        { label: 'Projects', icon: 'pi pi-briefcase', to: '/projects' },
         { label: 'Leaderboard', icon: 'pi pi-trophy', to: '/leaderboard' },
         { label: 'Bookmarks', icon: 'pi pi-bookmark', to: '/bookmarks' },
         { label: 'Late Records', icon: 'pi pi-clock', to: '/late-records', roles: ['ADMIN', 'HR'] },
