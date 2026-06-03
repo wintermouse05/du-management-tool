@@ -297,10 +297,17 @@ export interface ProjectMemberResponse {
 
 export interface ProjectTaskRequest {
   name: string
+  description?: string | null
   status: TaskStatus
-  assigneeId: number
+  assigneeIds: number[]
   startTime: string
   deadline: string
+}
+
+export interface ProjectTaskAssigneeResponse {
+  id: number
+  username: string
+  fullName: string
 }
 
 export interface ProjectTaskResponse {
@@ -308,11 +315,10 @@ export interface ProjectTaskResponse {
   projectId: number
   projectName: string
   name: string
+  description: string | null
   status: TaskStatus
   statusLabel: string
-  assigneeId: number
-  assigneeUsername: string
-  assigneeFullName: string
+  assignees: ProjectTaskAssigneeResponse[]
   startTime: string
   deadline: string
 }

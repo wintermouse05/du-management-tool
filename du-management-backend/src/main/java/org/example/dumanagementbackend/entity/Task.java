@@ -1,6 +1,8 @@
 package org.example.dumanagementbackend.entity;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.example.dumanagementbackend.entity.enums.TaskStatus;
 
@@ -14,8 +16,12 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -25,7 +31,6 @@ import lombok.Setter;
         name = "tasks",
         indexes = {
                 @Index(name = "idx_tasks_project_id", columnList = "project_id"),
-                @Index(name = "idx_tasks_assignee_id", columnList = "assignee_id"),
                 @Index(name = "idx_tasks_status", columnList = "status"),
                 @Index(name = "idx_tasks_deleted_at", columnList = "deleted_at")
         }
@@ -46,13 +51,26 @@ public class Task extends SoftDeletableEntity {
     @Column(nullable = false, length = 255)
     private String name;
 
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private TaskStatus status = TaskStatus.TODO;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assignee_id", nullable = false)
-    private User assignee;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "task_assignees",
+            joinColumns = @JoinColumn(name = "task_id", nullable = false),
+            inverseJoinColumns = @JoinColumn(name = "user_id", nullable = false),
+            uniqueConstraints = @UniqueConstraint(name = "uk_task_assignees_task_user", columnNames = {"task_id", "user_id"}),
+            indexes = {
+                    @Index(name = "idx_task_assignees_task_id", columnList = "task_id"),
+                    @Index(name = "idx_task_assignees_user_id", columnList = "user_id")
+            }
+    )
+    @OrderBy("fullName ASC")
+    private List<User> assignees = new ArrayList<>();
 
     @Column(name = "start_time", nullable = false)
     private LocalDateTime startTime;

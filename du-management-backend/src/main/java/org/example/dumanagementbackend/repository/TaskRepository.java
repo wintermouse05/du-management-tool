@@ -11,9 +11,10 @@ import org.springframework.data.repository.query.Param;
 public interface TaskRepository extends JpaRepository<Task, Long> {
 
     @Query("""
-            select t
+            select distinct t
               from Task t
-              join fetch t.assignee
+              join fetch t.project
+              left join fetch t.assignees
              where t.project.id = :projectId
                and t.deletedAt is null
              order by t.deadline asc
@@ -21,10 +22,10 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findActiveByProjectId(@Param("projectId") Long projectId);
 
     @Query("""
-            select t
+            select distinct t
               from Task t
-              join fetch t.assignee
               join fetch t.project
+              left join fetch t.assignees
              where t.id = :taskId
                and t.project.id = :projectId
                and t.deletedAt is null
@@ -36,5 +37,16 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     long countByProjectIdAndDeletedAtIsNull(Long projectId);
 
-    boolean existsByProjectIdAndAssigneeIdAndDeletedAtIsNull(Long projectId, Long assigneeId);
+    @Query("""
+            select case when count(t) > 0 then true else false end
+              from Task t
+              join t.assignees assignee
+             where t.project.id = :projectId
+               and assignee.id = :assigneeId
+               and t.deletedAt is null
+            """)
+    boolean existsActiveByProjectIdAndAssigneeId(
+            @Param("projectId") Long projectId,
+            @Param("assigneeId") Long assigneeId
+    );
 }

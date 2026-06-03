@@ -48,9 +48,6 @@ class MemberServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    @Mock
-    private RefreshTokenService refreshTokenService;
-
     @InjectMocks
     private MemberService memberService;
 
@@ -264,40 +261,6 @@ class MemberServiceTest {
     void deactivate_throwsNotFoundWhenUserMissing() {
         when(userRepository.findByIdAndDeletedAtIsNull(55L)).thenReturn(Optional.empty());
         assertThrows(ResourceNotFoundException.class, () -> memberService.deactivate(55L));
-    }
-
-    // ── delete ───────────────────────────────────────────────────────────────
-
-    @Test
-    void delete_archivesMemberAndRevokesRefreshTokens() {
-        Role role = buildRole(1L, "MEMBER");
-        User user = buildUser(6L, "deleteuser", role);
-
-        when(userRepository.findByIdAndDeletedAtIsNull(6L)).thenReturn(Optional.of(user));
-
-        memberService.delete(6L);
-
-        assertEquals(UserStatus.INACTIVE, user.getStatus());
-        assertTrue(user.isDeleted());
-        verify(userRepository).save(user);
-        verify(refreshTokenService).revokeActiveByUserId(6L, "USER_ARCHIVED");
-        verify(userRepository, never()).delete(any(User.class));
-    }
-
-    @Test
-    void delete_throwsBadRequestForSystemAdminAccount() {
-        Role role = buildRole(1L, "ADMIN");
-        User user = buildUser(1L, "admin", role);
-
-        when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
-
-        BadRequestException ex = assertThrows(BadRequestException.class, () -> memberService.delete(1L));
-
-        assertEquals("MEMBER_SYSTEM_ACCOUNT_ARCHIVE_FORBIDDEN", ex.getErrorCode());
-        assertEquals("The system admin account cannot be archived.", ex.getMessage());
-        verify(userRepository, never()).delete(any(User.class));
-        verify(userRepository, never()).save(any(User.class));
-        verify(refreshTokenService, never()).revokeActiveByUserId(any(), any());
     }
 
     // ── exportCsv ─────────────────────────────────────────────────────────────

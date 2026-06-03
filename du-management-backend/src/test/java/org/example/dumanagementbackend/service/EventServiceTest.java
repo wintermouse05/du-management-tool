@@ -101,7 +101,7 @@ class EventServiceTest {
     }
 
     @Test
-    void create_triggersImmediateReminderForEventWithinThreeDays() {
+    void create_doesNotTriggerImmediateReminderForEventWithinThreeDays() {
         EventRequest req = new EventRequest("Townhall", LocalDateTime.now().plusDays(2), "Main Hall", "All hands");
         Event saved = buildEvent(2L, "Townhall");
         saved.setEventDate(req.eventDate());
@@ -110,7 +110,7 @@ class EventServiceTest {
 
         eventService.create(req);
 
-        verify(notificationService).triggerEventReminder(2L);
+        verify(notificationService, never()).triggerEventReminder(any());
     }
 
     // ── getAll ───────────────────────────────────────────────────────────────

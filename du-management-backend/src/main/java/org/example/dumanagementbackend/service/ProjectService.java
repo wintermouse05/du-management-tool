@@ -1,7 +1,10 @@
 package org.example.dumanagementbackend.service;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 import org.example.dumanagementbackend.dto.project.AvailableProjectMemberResponse;
 import org.example.dumanagementbackend.dto.project.ProjectMemberRequest;
@@ -9,6 +12,7 @@ import org.example.dumanagementbackend.dto.project.ProjectMemberResponse;
 import org.example.dumanagementbackend.dto.project.ProjectRequest;
 import org.example.dumanagementbackend.dto.project.ProjectAvailabilitySummaryResponse;
 import org.example.dumanagementbackend.dto.project.ProjectResponse;
+import org.example.dumanagementbackend.dto.project.ProjectTaskAssigneeResponse;
 import org.example.dumanagementbackend.dto.project.ProjectTaskRequest;
 import org.example.dumanagementbackend.dto.project.ProjectTaskResponse;
 import org.example.dumanagementbackend.entity.Project;
@@ -145,7 +149,7 @@ public class ProjectService {
     public void removeMember(Long projectId, Long userId) {
         getProject(projectId);
         getProjectMember(projectId, userId);
-        if (taskRepository.existsByProjectIdAndAssigneeIdAndDeletedAtIsNull(projectId, userId)) {
+        if (taskRepository.existsActiveByProjectIdAndAssigneeId(projectId, userId)) {
             throw new BadRequestException("Cannot remove a project member with assigned active tasks");
         }
         projectMemberRepository.deleteByProjectIdAndUserId(projectId, userId);
@@ -162,11 +166,11 @@ public class ProjectService {
     public ProjectTaskResponse createTask(Long projectId, ProjectTaskRequest request) {
         Project project = getProject(projectId);
         validateTaskRange(request.startTime(), request.deadline());
-        User assignee = getTaskAssignee(projectId, request.assigneeId());
+        List<User> assignees = getTaskAssignees(projectId, request.assigneeIds());
 
         Task task = new Task();
         task.setProject(project);
-        task.setAssignee(assignee);
+        setTaskAssignees(task, assignees);
         applyTask(task, request);
         return toProjectTaskResponse(taskRepository.save(task));
     }
@@ -175,10 +179,10 @@ public class ProjectService {
     public ProjectTaskResponse updateTask(Long projectId, Long taskId, ProjectTaskRequest request) {
         getProject(projectId);
         validateTaskRange(request.startTime(), request.deadline());
-        User assignee = getTaskAssignee(projectId, request.assigneeId());
+        List<User> assignees = getTaskAssignees(projectId, request.assigneeIds());
 
         Task task = getTask(projectId, taskId);
-        task.setAssignee(assignee);
+        setTaskAssignees(task, assignees);
         applyTask(task, request);
         return toProjectTaskResponse(taskRepository.save(task));
     }
@@ -239,6 +243,29 @@ public class ProjectService {
         return user;
     }
 
+    private List<User> getTaskAssignees(Long projectId, List<Long> assigneeIds) {
+        if (assigneeIds == null || assigneeIds.isEmpty()) {
+            throw new BadRequestException("At least one task assignee is required");
+        }
+        if (assigneeIds.stream().anyMatch(Objects::isNull)) {
+            throw new BadRequestException("Task assignee IDs cannot contain null values");
+        }
+
+        Set<Long> uniqueAssigneeIds = new LinkedHashSet<>(assigneeIds);
+        if (uniqueAssigneeIds.size() != assigneeIds.size()) {
+            throw new BadRequestException("Task assignees cannot contain duplicate members");
+        }
+
+        return uniqueAssigneeIds.stream()
+                .map(assigneeId -> getTaskAssignee(projectId, assigneeId))
+                .toList();
+    }
+
+    private void setTaskAssignees(Task task, List<User> assignees) {
+        task.getAssignees().clear();
+        task.getAssignees().addAll(assignees);
+    }
+
     private void applyProject(Project project, ProjectRequest request, String name) {
         project.setName(name);
         project.setStatus(request.status());
@@ -254,6 +281,7 @@ public class ProjectService {
 
     private void applyTask(Task task, ProjectTaskRequest request) {
         task.setName(normalizeName(request.name()));
+        task.setDescription(request.description() != null ? request.description().trim() : null);
         task.setStatus(request.status());
         task.setStartTime(request.startTime());
         task.setDeadline(request.deadline());
@@ -310,17 +338,22 @@ public class ProjectService {
     }
 
     private ProjectTaskResponse toProjectTaskResponse(Task task) {
-        User assignee = task.getAssignee();
+        List<ProjectTaskAssigneeResponse> assignees = task.getAssignees().stream()
+                .map(user -> new ProjectTaskAssigneeResponse(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getFullName()
+                ))
+                .toList();
         return new ProjectTaskResponse(
                 task.getId(),
                 task.getProject().getId(),
                 task.getProject().getName(),
                 task.getName(),
+                task.getDescription(),
                 task.getStatus(),
                 task.getStatus().getLabel(),
-                assignee.getId(),
-                assignee.getUsername(),
-                assignee.getFullName(),
+                assignees,
                 task.getStartTime(),
                 task.getDeadline()
         );

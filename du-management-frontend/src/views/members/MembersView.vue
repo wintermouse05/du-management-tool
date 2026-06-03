@@ -66,9 +66,9 @@ const statusFilterOptions = computed<Array<{ label: string; value: MemberStatusF
 const dialogVisible = ref(false)
 const editing = ref(false)
 const editingId = ref<number | null>(null)
-const deleteConfirmDialog = ref(false)
-const deleteTarget = ref<MemberResponse | null>(null)
-const deleting = ref(false)
+const deactivateConfirmDialog = ref(false)
+const deactivateTarget = ref<MemberResponse | null>(null)
+const deactivating = ref(false)
 const form = ref<MemberRequest>({ roleId: 0, username: '', email: '', fullName: '', password: '', dob: null, joinDate: null, skills: [] })
 const formDob = ref<Date | null>(null)
 const formJoinDate = ref<Date | null>(null)
@@ -217,29 +217,24 @@ async function save() {
   } catch (err: any) { toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err, 'Failed'), life: 4000 }) }
 }
 
-async function deactivate(id: number) {
-  try { await membersApi.deactivate(id); toast.add({ severity: 'warn', summary: 'Member deactivated', life: 3000 }); loadMembers()
-  } catch (err: any) { toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err), life: 4000 }) }
+function openDeactivateConfirm(member: MemberResponse) {
+  deactivateTarget.value = member
+  deactivateConfirmDialog.value = true
 }
 
-function confirmDelete(member: MemberResponse) {
-  deleteTarget.value = member
-  deleteConfirmDialog.value = true
-}
-
-async function doDelete() {
-  if (!deleteTarget.value) return
-  deleting.value = true
+async function confirmDeactivate() {
+  if (!deactivateTarget.value) return
+  deactivating.value = true
   try {
-    await membersApi.delete(deleteTarget.value.id)
-    toast.add({ severity: 'success', summary: 'Member archived', life: 3000 })
-    deleteConfirmDialog.value = false
-    deleteTarget.value = null
+    await membersApi.deactivate(deactivateTarget.value.id)
+    toast.add({ severity: 'warn', summary: 'Member deactivated', life: 3000 })
+    deactivateConfirmDialog.value = false
+    deactivateTarget.value = null
     loadMembers()
   } catch (err: any) {
-    toast.add({ severity: 'error', summary: 'Archive failed', detail: getApiErrorDetail(err, 'Unable to archive member'), life: 4000 })
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err), life: 4000 })
   } finally {
-    deleting.value = false
+    deactivating.value = false
   }
 }
 
@@ -285,8 +280,21 @@ async function exportCsv() {
 
 function statusSeverity(s: UserStatus) { return s === UserStatus.ACTIVE ? 'success' : 'danger' }
 
-function canDeleteMember(member: MemberResponse) {
-  return auth.isAdmin && member.username.toLowerCase() !== 'admin'
+function formatTenure(months: number | null) {
+  if (months == null) {
+    return '-'
+  }
+  if (months <= 12) {
+    return `${months} ${months === 1 ? 'month' : 'months'}`
+  }
+
+  const years = Math.floor(months / 12)
+  const remainingMonths = months % 12
+  const parts = [`${years} ${years === 1 ? 'year' : 'years'}`]
+  if (remainingMonths > 0) {
+    parts.push(`${remainingMonths} ${remainingMonths === 1 ? 'month' : 'months'}`)
+  }
+  return parts.join(' ')
 }
 
 onMounted(() => { loadMembers(); loadRoles() })
@@ -313,7 +321,7 @@ onMounted(() => { loadMembers(); loadRoles() })
       <div style="display:flex;gap:8px;align-items:end;margin-bottom:var(--space-4);flex-wrap:wrap;">
         <div class="form-field" style="min-width:260px;margin:0;">
           <label>Search</label>
-          <InputText v-model="searchQuery" placeholder="Name, username, email (min 2 chars)" fluid />
+          <InputText v-model="searchQuery" placeholder="Name (min 2 chars)" fluid />
         </div>
         <div class="form-field" style="min-width:180px;margin:0;">
           <label>Status</label>
@@ -333,8 +341,6 @@ onMounted(() => { loadMembers(); loadRoles() })
           No Member found. Please adjust filters or create a new Member.
         </template>
         <Column field="fullName" header="Name" />
-        <Column field="username" header="Username" />
-        <Column field="email" header="Email" />
         <Column field="roleName" header="Role">
           <template #body="{ data }"><Tag :value="data.roleName" :severity="data.roleName === 'ADMIN' ? 'danger' : data.roleName === 'HR' ? 'warn' : 'info'" /></template>
         </Column>
@@ -352,8 +358,8 @@ onMounted(() => { loadMembers(); loadRoles() })
             <span v-else class="caption">-</span>
           </template>
         </Column>
-        <Column field="tenureMonths" header="Tenure (months)">
-          <template #body="{ data }">{{ data.tenureMonths ?? '-' }}</template>
+        <Column field="tenureMonths" header="Tenure">
+          <template #body="{ data }">{{ formatTenure(data.tenureMonths) }}</template>
         </Column>
         <Column field="totalPoints" header="Points" />
         <Column field="status" header="Status">
@@ -363,8 +369,7 @@ onMounted(() => { loadMembers(); loadRoles() })
           <template #body="{ data }">
             <div class="flex-end">
               <Button icon="pi pi-pencil" text rounded severity="info" @click="openEdit(data)" />
-              <Button v-if="data.status === 'ACTIVE'" icon="pi pi-ban" text rounded severity="danger" @click="deactivate(data.id)" />
-              <Button v-if="canDeleteMember(data)" icon="pi pi-trash" text rounded severity="danger" @click="confirmDelete(data)" />
+              <Button v-if="data.status === 'ACTIVE'" icon="pi pi-ban" text rounded severity="danger" @click="openDeactivateConfirm(data)" />
             </div>
           </template>
         </Column>
@@ -432,15 +437,16 @@ onMounted(() => { loadMembers(); loadRoles() })
       <template #footer><Button label="Cancel" text @click="dialogVisible = false" /><Button :label="editing ? 'Update' : 'Create'" icon="pi pi-check" @click="save" /></template>
     </Dialog>
 
-    <Dialog v-model:visible="deleteConfirmDialog" header="Archive Member" modal :style="{ width: '380px' }">
+    <Dialog v-model:visible="deactivateConfirmDialog" header="Deactivate Member" modal :style="{ width: '380px' }">
       <p style="margin:0;">
-        Archive {{ deleteTarget?.fullName || 'this member' }} and hide them from normal member lists?
+        Deactivate {{ deactivateTarget?.fullName || 'this member' }} and hide them from normal member lists?
       </p>
       <template #footer>
-        <Button label="Cancel" text @click="deleteConfirmDialog = false" />
-        <Button label="Archive" severity="danger" icon="pi pi-trash" :loading="deleting" @click="doDelete" />
+        <Button label="Cancel" text @click="deactivateConfirmDialog = false" />
+        <Button label="Deactivate" severity="danger" icon="pi pi-ban" :loading="deactivating" @click="confirmDeactivate" />
       </template>
     </Dialog>
+
   </div>
 </template>
 

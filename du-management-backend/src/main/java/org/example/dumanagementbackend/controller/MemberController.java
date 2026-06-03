@@ -16,7 +16,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -110,13 +109,6 @@ public class MemberController {
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<MemberResponse> deactivate(@PathVariable Long id) {
         return ResponseEntity.ok(memberService.deactivate(id));
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        memberService.delete(id);
-        return ResponseEntity.noContent().build();
     }
 
     private boolean isCurrentUserAdminAccount(Authentication authentication) {

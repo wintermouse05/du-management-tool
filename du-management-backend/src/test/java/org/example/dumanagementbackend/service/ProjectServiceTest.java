@@ -235,25 +235,28 @@ class ProjectServiceTest {
     }
 
     @Test
-    void createTask_savesProjectScopedTaskForProjectMember() {
+    void createTask_savesProjectScopedTaskForProjectMembers() {
         Harness harness = new Harness();
         Project project = buildProject(1L);
         User assignee = buildUser(2L, "member", UserStatus.ACTIVE);
+        User reviewer = buildUser(3L, "reviewer", UserStatus.ACTIVE);
         harness.addProject(project);
         harness.addUser(assignee);
+        harness.addUser(reviewer);
         harness.addProjectMember(buildMembership(project, assignee, ProjectRole.BACKEND_DEVELOPER));
+        harness.addProjectMember(buildMembership(project, reviewer, ProjectRole.TECH_LEAD));
 
         ProjectTaskResponse response = harness.service.createTask(1L, new ProjectTaskRequest(
                 "API work",
                 TaskStatus.IN_PROGRESS,
-                2L,
+                List.of(2L, 3L),
                 START,
                 END
         ));
 
         assertEquals(10L, response.id());
         assertEquals(1L, response.projectId());
-        assertEquals(2L, response.assigneeId());
+        assertEquals(List.of(2L, 3L), response.assignees().stream().map(assigneeResponse -> assigneeResponse.id()).toList());
         assertEquals(TaskStatus.IN_PROGRESS, response.status());
         assertEquals(1, harness.tasks.size());
     }
@@ -268,10 +271,28 @@ class ProjectServiceTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> harness.service.createTask(
                 1L,
-                new ProjectTaskRequest("API work", TaskStatus.TODO, 2L, START, END)
+                new ProjectTaskRequest("API work", TaskStatus.TODO, List.of(2L), START, END)
         ));
 
         assertEquals("Task assignee must be a member of the project", ex.getMessage());
+        assertEquals(0, harness.tasks.size());
+    }
+
+    @Test
+    void createTask_rejectsDuplicateAssignees() {
+        Harness harness = new Harness();
+        Project project = buildProject(1L);
+        User assignee = buildUser(2L, "member", UserStatus.ACTIVE);
+        harness.addProject(project);
+        harness.addUser(assignee);
+        harness.addProjectMember(buildMembership(project, assignee, ProjectRole.BACKEND_DEVELOPER));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> harness.service.createTask(
+                1L,
+                new ProjectTaskRequest("API work", TaskStatus.TODO, List.of(2L, 2L), START, END)
+        ));
+
+        assertEquals("Task assignees cannot contain duplicate members", ex.getMessage());
         assertEquals(0, harness.tasks.size());
     }
 
@@ -282,7 +303,7 @@ class ProjectServiceTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> harness.service.createTask(
                 1L,
-                new ProjectTaskRequest("API work", TaskStatus.TODO, 2L, END, START)
+                new ProjectTaskRequest("API work", TaskStatus.TODO, List.of(2L), END, START)
         ));
 
         assertEquals("Task start time must be before or equal to deadline", ex.getMessage());
@@ -348,7 +369,7 @@ class ProjectServiceTest {
         task.setProject(project);
         task.setName("API work");
         task.setStatus(TaskStatus.TODO);
-        task.setAssignee(assignee);
+        task.getAssignees().add(assignee);
         task.setStartTime(START);
         task.setDeadline(END);
         return task;
@@ -452,9 +473,9 @@ class ProjectServiceTest {
                 case "countByProjectIdAndDeletedAtIsNull" -> tasks.values().stream()
                         .filter(task -> task.getProject().getId().equals(args[0]) && !task.isDeleted())
                         .count();
-                case "existsByProjectIdAndAssigneeIdAndDeletedAtIsNull" -> tasks.values().stream()
+                case "existsActiveByProjectIdAndAssigneeId" -> tasks.values().stream()
                         .anyMatch(task -> task.getProject().getId().equals(args[0])
-                                && task.getAssignee().getId().equals(args[1])
+                                && task.getAssignees().stream().anyMatch(assignee -> assignee.getId().equals(args[1]))
                                 && !task.isDeleted());
                 case "save" -> {
                     Task task = (Task) args[0];

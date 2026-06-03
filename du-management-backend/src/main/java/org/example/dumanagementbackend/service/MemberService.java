@@ -57,7 +57,6 @@ public class MemberService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
-    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public MemberResponse create(MemberRequest request) {
@@ -194,22 +193,6 @@ public class MemberService {
         User user = getEntityById(id);
         user.setStatus(UserStatus.INACTIVE);
         return toResponse(userRepository.save(user));
-    }
-
-    @Transactional
-    public void delete(Long id) {
-        User user = getEntityById(id);
-        if (SystemAccountUtils.isAdminAccount(user)) {
-            throw new BadRequestException(
-                    "MEMBER_SYSTEM_ACCOUNT_ARCHIVE_FORBIDDEN",
-                    "The system admin account cannot be archived."
-            );
-        }
-
-        user.setStatus(UserStatus.INACTIVE);
-        SoftDeleteUtils.markDeleted(user);
-        userRepository.save(user);
-        refreshTokenService.revokeActiveByUserId(user.getId(), "USER_ARCHIVED");
     }
 
     public User getEntityById(Long id) {

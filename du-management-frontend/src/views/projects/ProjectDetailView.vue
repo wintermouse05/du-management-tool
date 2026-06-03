@@ -25,7 +25,9 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import DatePicker from 'primevue/datepicker'
 import Select from 'primevue/select'
+import MultiSelect from 'primevue/multiselect'
 import Tag from 'primevue/tag'
+import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 
 type DetailTab = 'members' | 'tasks'
@@ -65,8 +67,9 @@ const editTaskId = ref<number | null>(null)
 const taskSaving = ref(false)
 const taskForm = ref<ProjectTaskRequest>({
   name: '',
+  description: '',
   status: TaskStatus.TODO,
-  assigneeId: 0,
+  assigneeIds: [],
   startTime: '',
   deadline: '',
 })
@@ -116,7 +119,7 @@ const canSubmitMember = computed(() => {
 
 const canSubmitTask = computed(() => {
   return taskForm.value.name.trim().length > 0
-    && taskForm.value.assigneeId > 0
+    && taskForm.value.assigneeIds.length > 0
     && resolveFormDate(taskStartDate.value) !== null
     && resolveFormDate(taskDeadlineDate.value) !== null
 })
@@ -262,8 +265,9 @@ function openCreateTask() {
   editTaskId.value = null
   taskForm.value = {
     name: '',
+    description: '',
     status: TaskStatus.TODO,
-    assigneeId: 0,
+    assigneeIds: [],
     startTime: '',
     deadline: '',
   }
@@ -277,8 +281,9 @@ function openEditTask(task: ProjectTaskResponse) {
   editTaskId.value = task.id
   taskForm.value = {
     name: task.name,
+    description: task.description || '',
     status: task.status,
-    assigneeId: task.assigneeId,
+    assigneeIds: task.assignees.map(assignee => assignee.id),
     startTime: task.startTime,
     deadline: task.deadline,
   }
@@ -290,7 +295,7 @@ function openEditTask(task: ProjectTaskResponse) {
 async function saveTask() {
   const start = resolveFormDate(taskStartDate.value)
   const deadline = resolveFormDate(taskDeadlineDate.value)
-  if (!taskForm.value.name.trim() || !taskForm.value.assigneeId || !start || !deadline) {
+  if (!taskForm.value.name.trim() || taskForm.value.assigneeIds.length === 0 || !start || !deadline) {
     toast.add({ severity: 'warn', summary: 'Missing task details', detail: 'Please complete all required fields.', life: 3000 })
     return
   }
@@ -301,8 +306,9 @@ async function saveTask() {
 
   const payload: ProjectTaskRequest = {
     name: taskForm.value.name.trim(),
+    description: taskForm.value.description?.trim() || null,
     status: taskForm.value.status,
-    assigneeId: taskForm.value.assigneeId,
+    assigneeIds: taskForm.value.assigneeIds,
     startTime: toLocalDateTime(start),
     deadline: toLocalDateTime(deadline),
   }
@@ -347,6 +353,11 @@ function resolveFormDate(value: unknown): Date | null {
 
 function fmtDate(value: string) {
   return formatLocalDateTime(value)
+}
+
+function formatTaskAssignees(task: ProjectTaskResponse) {
+  const names = (task.assignees || []).map(assignee => assignee.fullName)
+  return names.length ? names.join(', ') : 'Unassigned'
 }
 
 function getProjectStatusSeverity(status: ProjectStatus) {
@@ -477,12 +488,17 @@ onMounted(loadAll)
           No tasks have been created for this project yet.
         </template>
         <Column field="name" header="Task Name" />
+        <Column field="description" header="Description">
+          <template #body="{ data }">{{ data.description || '—' }}</template>
+        </Column>
         <Column field="status" header="Status" style="width:150px">
           <template #body="{ data }">
             <Tag :value="data.statusLabel" :severity="getTaskStatusSeverity(data.status)" />
           </template>
         </Column>
-        <Column field="assigneeFullName" header="Assignee" />
+        <Column header="Assignees">
+          <template #body="{ data }">{{ formatTaskAssignees(data) }}</template>
+        </Column>
         <Column field="startTime" header="Start">
           <template #body="{ data }">{{ fmtDate(data.startTime) }}</template>
         </Column>
@@ -547,25 +563,30 @@ onMounted(loadAll)
           <InputText v-model="taskForm.name" fluid />
         </div>
         <div class="form-field">
+          <label>Description</label>
+          <Textarea v-model="taskForm.description" rows="3" fluid />
+        </div>
+        <div class="form-field">
           <label class="required">Status</label>
           <Select v-model="taskForm.status" :options="taskStatusOptions" option-label="label" option-value="value" fluid />
         </div>
         <div class="form-field">
-          <label class="required">Assignee</label>
-          <Select
-            v-model="taskForm.assigneeId"
+          <label class="required">Assignees</label>
+          <MultiSelect
+            v-model="taskForm.assigneeIds"
             :options="taskAssigneeOptions"
             option-label="fullName"
             option-value="id"
-            placeholder="Select project member"
+            placeholder="Select project members"
             filter
+            display="chip"
             :filter-fields="['username', 'fullName', 'email']"
             fluid
           >
             <template #option="{ option }">
               <div>{{ option.fullName }} <span class="select-hint">(@{{ option.username }})</span></div>
             </template>
-          </Select>
+          </MultiSelect>
         </div>
         <div class="form-field">
           <label class="required">Start</label>

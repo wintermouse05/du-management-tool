@@ -43,8 +43,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Transactional(readOnly = true)
 public class EventService {
 
-    private static final long IMMEDIATE_REMINDER_DAYS = 3L;
-
     private final EventRepository eventRepository;
     private final EventAttendeeRepository eventAttendeeRepository;
     private final UserRepository userRepository;
@@ -60,7 +58,6 @@ public class EventService {
         apply(event, request);
         Event saved = eventRepository.save(event);
         triggerCreatedNotification(saved);
-        triggerImmediateReminderIfNeeded(saved);
         return toResponse(saved, resolveCreatorNames(List.of(saved)));
     }
 
@@ -167,22 +164,6 @@ public class EventService {
         event.setEventDate(request.eventDate());
         event.setLocation(request.location());
         event.setDescription(request.description());
-    }
-
-    private void triggerImmediateReminderIfNeeded(Event event) {
-        if (event.getId() == null || event.getEventDate() == null) {
-            return;
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime reminderThreshold = now.plusDays(IMMEDIATE_REMINDER_DAYS);
-        if (event.getEventDate().isAfter(now) && !event.getEventDate().isAfter(reminderThreshold)) {
-            Long eventId = event.getId();
-            dispatchAfterCommit(
-                    "Immediate reminder dispatch for eventId=" + eventId,
-                    () -> notificationService.triggerEventReminder(eventId)
-            );
-        }
     }
 
     private void triggerCreatedNotification(Event event) {

@@ -1,11 +1,14 @@
 package org.example.dumanagementbackend.service;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.example.dumanagementbackend.dto.project.AvailableProjectMemberResponse;
 import org.example.dumanagementbackend.dto.project.ProjectAvailabilitySummaryResponse;
@@ -26,6 +29,7 @@ import org.example.dumanagementbackend.repository.NotificationScheduleRepository
 import org.example.dumanagementbackend.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -40,12 +44,16 @@ public class ChatopsNotificationService {
     private static final int MAX_LEADERBOARD_ENTRIES = 50;
     private static final int DETAILS_PREVIEW_MAX_LENGTH = 500;
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final Pattern RELATIVE_MARKDOWN_LINK_PATTERN = Pattern.compile("\\]\\((/[^)\\s]*)\\)");
 
     private final ChatopsService chatopsService;
     private final UserRepository userRepository;
     private final NotificationScheduleRepository notificationScheduleRepository;
     private final LateRecordRepository lateRecordRepository;
     private final SystemLogService systemLogService;
+
+    @Value("${chatops.open-link-base-url:}")
+    private String openLinkBaseUrl;
 
     // ---- basic sending ----
 
@@ -55,7 +63,7 @@ public class ChatopsNotificationService {
 
     public String sendToChannel(String message, String targetChannelId) {
         String resolvedChannelId = resolveTargetChannelId(targetChannelId);
-        String postId = chatopsService.sendMessageWithResponse(resolvedChannelId, message, null);
+        String postId = chatopsService.sendMessageWithResponse(resolvedChannelId, prepareOutgoingMessage(message), null);
         logChatMessage("CHAT_CHANNEL", resolvedChannelId, postId, postId == null ? SystemLogStatus.FAILED : SystemLogStatus.SUCCESS, null);
         return postId;
     }
@@ -66,7 +74,7 @@ public class ChatopsNotificationService {
 
     public String sendThreadReply(String message, String rootPostId, String targetChannelId) {
         String resolvedChannelId = resolveTargetChannelId(targetChannelId);
-        String postId = chatopsService.sendMessageWithResponse(resolvedChannelId, message, rootPostId);
+        String postId = chatopsService.sendMessageWithResponse(resolvedChannelId, prepareOutgoingMessage(message), rootPostId);
         logChatMessage("CHAT_THREAD_REPLY", resolvedChannelId, postId, postId == null ? SystemLogStatus.FAILED : SystemLogStatus.SUCCESS, rootPostId);
         return postId;
     }
@@ -80,7 +88,7 @@ public class ChatopsNotificationService {
             String senderId = (String) sender.get("id");
 
             String dmChannelId = chatopsService.getDirectChannelId(senderId, receiverId);
-            chatopsService.sendMessage(dmChannelId, message);
+            chatopsService.sendMessage(dmChannelId, prepareOutgoingMessage(message));
             logChatMessage("CHAT_DIRECT_MESSAGE", dmChannelId, null, SystemLogStatus.SUCCESS, null);
         } catch (Exception e) {
             log.error("Failed to send DM from {} to {}: {}", senderEmail, receiverEmail, e.getMessage());
@@ -160,8 +168,10 @@ public class ChatopsNotificationService {
         }
 
         if (!mentions.isEmpty()) {
-            String message = "@all\nToday is the birthday of" + mentions + "\nLet's send best wishes!";
-            String postId = sendThreadReply(message, schedule.getChatopsPostId(), resolveScheduleChannelId(schedule));
+            StringBuilder message = new StringBuilder("@all\nToday is the birthday of");
+            message.append(mentions).append("\nLet's send best wishes!");
+            appendActionLink(message, "Open members", "/members");
+            String postId = sendThreadReply(message.toString(), schedule.getChatopsPostId(), resolveScheduleChannelId(schedule));
 
             if (schedule.getChatopsPostId() == null && postId != null) {
                 schedule.setChatopsPostId(postId);
@@ -196,6 +206,7 @@ public class ChatopsNotificationService {
         if (!mentions.isEmpty()) {
             mentions.insert(0, "@all\n");
             mentions.append("Thank you for being part of the team!");
+            appendActionLink(mentions, "Open members", "/members");
             String postId = sendThreadReply(mentions.toString(), schedule.getChatopsPostId(), resolveScheduleChannelId(schedule));
 
             if (schedule.getChatopsPostId() == null && postId != null) {
@@ -259,6 +270,7 @@ public class ChatopsNotificationService {
         if (grandTotal > 0) {
             table.append("\nTotal unpaid fine: ").append(formatCurrency(grandTotal));
         }
+        appendActionLink(table, "Open late records", "/late-records");
 
         String message = "Late penalty report " + today.getMonthValue() + "/" + today.getYear() + "\n"
                 + "Danh sach di tre chua nop phat:\n"
@@ -310,7 +322,7 @@ public class ChatopsNotificationService {
         if (actionUrl == null || actionUrl.isBlank()) {
             return;
         }
-        message.append("\n[").append(label).append("](").append(actionUrl).append(")");
+        message.append("\n[").append(label).append("](").append(resolveOpenLink(actionUrl)).append(")");
     }
 
     private String valueOrFallback(String value, String fallback) {
@@ -336,8 +348,9 @@ public class ChatopsNotificationService {
         if (scheduleOpt.isEmpty() || !scheduleOpt.get().isEnabled()) return;
 
         NotificationSchedule schedule = scheduleOpt.get();
-        String message = "Upcoming events - check the events page for details: /events";
-        String postId = sendThreadReply(message, schedule.getChatopsPostId(), resolveScheduleChannelId(schedule));
+        StringBuilder message = new StringBuilder("Upcoming events - check the events page for details.");
+        appendActionLink(message, "Open events", "/events");
+        String postId = sendThreadReply(message.toString(), schedule.getChatopsPostId(), resolveScheduleChannelId(schedule));
 
         if (schedule.getChatopsPostId() == null && postId != null) {
             schedule.setChatopsPostId(postId);
@@ -380,8 +393,9 @@ public class ChatopsNotificationService {
         if (rankedUsers.size() > limit) {
             int hiddenCount = rankedUsers.size() - limit;
             table.append("\n...and ").append(hiddenCount)
-                    .append(" more members. View full ranking at /leaderboard");
+                    .append(" more members.");
         }
+        appendActionLink(table, "Open leaderboard", "/leaderboard");
 
         String postId = sendThreadReply(table.toString(), schedule.getChatopsPostId(), resolveScheduleChannelId(schedule));
         if (schedule.getChatopsPostId() == null && postId != null) {
@@ -406,11 +420,10 @@ public class ChatopsNotificationService {
         if (availableCount == 0) {
             message.append("No active available members found.");
         } else {
-            message.append("| Name | Email | Role |\n");
-            message.append("|------|-------|------|\n");
+            message.append("| Name | Role |\n");
+            message.append("|------|------|\n");
             availableMembers.forEach(member -> message
-                    .append("| ").append(escapeTableValue(member.fullName())).append(" | ")
-                    .append(escapeTableValue(member.email())).append(" | ")
+                    .append("| ").append("@").append(escapeTableValue(member.email())).append(" | ")
                     .append(escapeTableValue(member.roleName())).append(" |\n"));
         }
 
@@ -463,6 +476,54 @@ public class ChatopsNotificationService {
             return targetChannelId;
         }
         return chatopsService.getOutputChannelId();
+    }
+
+    private String prepareOutgoingMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return message;
+        }
+        Matcher matcher = RELATIVE_MARKDOWN_LINK_PATTERN.matcher(message);
+        StringBuffer rewritten = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(
+                    rewritten,
+                    Matcher.quoteReplacement("](" + resolveOpenLink(matcher.group(1)) + ")")
+            );
+        }
+        matcher.appendTail(rewritten);
+        return rewritten.toString();
+    }
+
+    private String resolveOpenLink(String actionUrl) {
+        String trimmedActionUrl = actionUrl != null ? actionUrl.trim() : "";
+        if (trimmedActionUrl.isBlank() || isAbsoluteUrl(trimmedActionUrl)) {
+            return trimmedActionUrl;
+        }
+        String trimmedBaseUrl = openLinkBaseUrl != null ? openLinkBaseUrl.trim() : "";
+        if (trimmedBaseUrl.isBlank()) {
+            return trimmedActionUrl;
+        }
+        String baseUrl = stripTrailingSlash(trimmedBaseUrl);
+        if (trimmedActionUrl.startsWith("/")) {
+            return baseUrl + trimmedActionUrl;
+        }
+        return baseUrl + "/" + trimmedActionUrl;
+    }
+
+    private boolean isAbsoluteUrl(String value) {
+        try {
+            return URI.create(value).isAbsolute();
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+    }
+
+    private String stripTrailingSlash(String value) {
+        String result = value;
+        while (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result;
     }
 
     private void logChatMessage(String action, String channelId, String postId, SystemLogStatus status, String rootPostId) {
