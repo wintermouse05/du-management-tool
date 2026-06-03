@@ -9,6 +9,7 @@ import type {
   ProjectResponse,
   ProjectTaskRequest,
   ProjectTaskResponse,
+  ProjectTaskStatusUpdateRequest,
 } from '@/types'
 
 export const projectsApi = {
@@ -66,5 +67,9 @@ export const projectsApi = {
 
   deleteTask(projectId: number, taskId: number) {
     return http.delete<void>(`/projects/${projectId}/tasks/${taskId}`)
+  },
+
+  updateTaskStatus(projectId: number, taskId: number, data: ProjectTaskStatusUpdateRequest) {
+    return http.patch<ProjectTaskResponse>(`/projects/${projectId}/tasks/${taskId}/status`, data)
   },
 }

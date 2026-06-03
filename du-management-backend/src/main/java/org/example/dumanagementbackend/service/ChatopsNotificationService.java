@@ -11,6 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.example.dumanagementbackend.dto.project.AvailableProjectMemberResponse;
+import org.example.dumanagementbackend.dto.project.OverdueProjectTaskResponse;
 import org.example.dumanagementbackend.dto.project.ProjectAvailabilitySummaryResponse;
 import org.example.dumanagementbackend.entity.LateRecord;
 import org.example.dumanagementbackend.entity.NotificationSchedule;
@@ -440,6 +441,40 @@ public class ChatopsNotificationService {
     public record AvailableMembersReportResult(
             boolean sent,
             int availableMemberCount,
+            String postId
+    ) {
+    }
+
+    public OverdueTaskReportResult sendOverdueTaskReport(List<OverdueProjectTaskResponse> overdueTasks) {
+        int overdueTaskCount = overdueTasks != null ? overdueTasks.size() : 0;
+        if (overdueTaskCount == 0) {
+            log.info("No overdue tasks found for scheduled report");
+            return new OverdueTaskReportResult(false, 0, null);
+        }
+
+        LocalDate today = LocalDate.now();
+        StringBuilder message = new StringBuilder("@all\n");
+        message.append("**Overdue tasks report - ").append(today).append("**\n\n");
+        message.append("| Task Name | Project Name | Deadline |\n");
+        message.append("|-----------|--------------|----------|\n");
+        overdueTasks.forEach(task -> message
+                .append("| ").append(escapeTableValue(task.taskName())).append(" | ")
+                .append(escapeTableValue(task.projectName())).append(" | ")
+                .append(formatDateTime(task.deadline())).append(" |\n"));
+
+        String postId = sendToChannel(message.toString());
+        boolean sent = postId != null;
+        if (sent) {
+            log.info("Overdue tasks report sent. overdueTasks={}, postId={}", overdueTaskCount, postId);
+        } else {
+            log.warn("Overdue tasks report failed to send. overdueTasks={}", overdueTaskCount);
+        }
+        return new OverdueTaskReportResult(sent, overdueTaskCount, postId);
+    }
+
+    public record OverdueTaskReportResult(
+            boolean sent,
+            int overdueTaskCount,
             String postId
     ) {
     }

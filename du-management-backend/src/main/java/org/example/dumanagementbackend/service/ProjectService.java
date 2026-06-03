@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.example.dumanagementbackend.dto.project.AvailableProjectMemberResponse;
+import org.example.dumanagementbackend.dto.project.OverdueProjectTaskResponse;
 import org.example.dumanagementbackend.dto.project.ProjectMemberRequest;
 import org.example.dumanagementbackend.dto.project.ProjectMemberResponse;
 import org.example.dumanagementbackend.dto.project.ProjectRequest;
@@ -21,6 +22,7 @@ import org.example.dumanagementbackend.entity.ProjectMemberId;
 import org.example.dumanagementbackend.entity.Task;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.enums.ProjectStatus;
+import org.example.dumanagementbackend.entity.enums.TaskStatus;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
@@ -62,6 +64,16 @@ public class ProjectService {
 
     public List<AvailableProjectMemberResponse> getAvailableMembers() {
         return getAvailableMembers(LocalDateTime.now());
+    }
+
+    public List<OverdueProjectTaskResponse> getOverdueTasks() {
+        return getOverdueTasks(LocalDateTime.now());
+    }
+
+    public List<OverdueProjectTaskResponse> getOverdueTasks(LocalDateTime now) {
+        return taskRepository.findOverdueActiveTasks(now, TaskStatus.DONE).stream()
+                .map(this::toOverdueProjectTaskResponse)
+                .toList();
     }
 
     public ProjectResponse getById(Long id) {
@@ -193,6 +205,46 @@ public class ProjectService {
         Task task = getTask(projectId, taskId);
         SoftDeleteUtils.markDeleted(task);
         taskRepository.save(task);
+    }
+
+    @Transactional
+    public ProjectTaskResponse updateTaskStatus(Long projectId, Long taskId, TaskStatus status) {
+        getProject(projectId);
+        Task task = getTask(projectId, taskId);
+
+        String currentUsername = getCurrentUsername();
+        boolean isAdminOrHR = hasAdminOrHRRole();
+
+        if (!isAdminOrHR) {
+            boolean isAssignee = task.getAssignees().stream()
+                    .anyMatch(user -> user.getUsername().equalsIgnoreCase(currentUsername));
+            if (!isAssignee) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Only task assignees can update the task status");
+            }
+        }
+
+        task.setStatus(status);
+        return toProjectTaskResponse(taskRepository.save(task));
+    }
+
+    private String getCurrentUsername() {
+        org.springframework.security.core.Authentication authentication =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return null;
+        }
+        return authentication.getName();
+    }
+
+    private boolean hasAdminOrHRRole() {
+        org.springframework.security.core.Authentication authentication =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        return authentication.getAuthorities().stream().anyMatch(authority ->
+                "ROLE_ADMIN".equals(authority.getAuthority()) || "ROLE_HR".equals(authority.getAuthority()));
     }
 
     private Project getProject(Long id) {
@@ -366,6 +418,14 @@ public class ProjectService {
                 user.getFullName(),
                 user.getEmail(),
                 user.getRole() != null ? user.getRole().getName() : null
+        );
+    }
+
+    private OverdueProjectTaskResponse toOverdueProjectTaskResponse(Task task) {
+        return new OverdueProjectTaskResponse(
+                task.getName(),
+                task.getProject().getName(),
+                task.getDeadline()
         );
     }
 }

@@ -124,6 +124,14 @@ const canSubmitTask = computed(() => {
     && resolveFormDate(taskDeadlineDate.value) !== null
 })
 
+function isCurrentUserAssignee(task: ProjectTaskResponse): boolean {
+  return (task.assignees || []).some(a => a.id === auth.userId)
+}
+
+function canChangeTaskStatus(task: ProjectTaskResponse): boolean {
+  return auth.isAdminOrHR || isCurrentUserAssignee(task)
+}
+
 async function loadAll() {
   if (!Number.isFinite(projectId) || projectId <= 0) {
     await router.push('/projects')
@@ -341,6 +349,16 @@ async function archiveTask(task: ProjectTaskResponse) {
   }
 }
 
+async function changeTaskStatus(task: ProjectTaskResponse, newStatus: TaskStatus) {
+  try {
+    await projectsApi.updateTaskStatus(projectId, task.id, { status: newStatus })
+    toast.add({ severity: 'success', summary: 'Task status updated', life: 2500 })
+    await loadTasks()
+  } catch (err: any) {
+    toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err, 'Failed to update task status'), life: 3500 })
+  }
+}
+
 function resolveFormDate(value: unknown): Date | null {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value
@@ -491,9 +509,18 @@ onMounted(loadAll)
         <Column field="description" header="Description">
           <template #body="{ data }">{{ data.description || '—' }}</template>
         </Column>
-        <Column field="status" header="Status" style="width:150px">
+        <Column field="status" header="Status" style="width:180px">
           <template #body="{ data }">
-            <Tag :value="data.statusLabel" :severity="getTaskStatusSeverity(data.status)" />
+            <Select
+              v-if="canChangeTaskStatus(data)"
+              :modelValue="data.status"
+              :options="taskStatusOptions"
+              option-label="label"
+              option-value="value"
+              @update:modelValue="(val: TaskStatus) => changeTaskStatus(data, val)"
+              style="min-width: 140px"
+            />
+            <Tag v-else :value="data.statusLabel" :severity="getTaskStatusSeverity(data.status)" />
           </template>
         </Column>
         <Column header="Assignees">

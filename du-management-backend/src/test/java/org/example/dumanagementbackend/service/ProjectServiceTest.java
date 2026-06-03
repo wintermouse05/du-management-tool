@@ -248,6 +248,7 @@ class ProjectServiceTest {
 
         ProjectTaskResponse response = harness.service.createTask(1L, new ProjectTaskRequest(
                 "API work",
+                null,
                 TaskStatus.IN_PROGRESS,
                 List.of(2L, 3L),
                 START,
@@ -271,7 +272,7 @@ class ProjectServiceTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> harness.service.createTask(
                 1L,
-                new ProjectTaskRequest("API work", TaskStatus.TODO, List.of(2L), START, END)
+                new ProjectTaskRequest("API work", null, TaskStatus.TODO, List.of(2L), START, END)
         ));
 
         assertEquals("Task assignee must be a member of the project", ex.getMessage());
@@ -289,7 +290,7 @@ class ProjectServiceTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> harness.service.createTask(
                 1L,
-                new ProjectTaskRequest("API work", TaskStatus.TODO, List.of(2L, 2L), START, END)
+                new ProjectTaskRequest("API work", null, TaskStatus.TODO, List.of(2L, 2L), START, END)
         ));
 
         assertEquals("Task assignees cannot contain duplicate members", ex.getMessage());
@@ -303,7 +304,7 @@ class ProjectServiceTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> harness.service.createTask(
                 1L,
-                new ProjectTaskRequest("API work", TaskStatus.TODO, List.of(2L), END, START)
+                new ProjectTaskRequest("API work", null, TaskStatus.TODO, List.of(2L), END, START)
         ));
 
         assertEquals("Task start time must be before or equal to deadline", ex.getMessage());

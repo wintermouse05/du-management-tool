@@ -304,6 +304,10 @@ export interface ProjectTaskRequest {
   deadline: string
 }
 
+export interface ProjectTaskStatusUpdateRequest {
+  status: TaskStatus
+}
+
 export interface ProjectTaskAssigneeResponse {
   id: number
   username: string

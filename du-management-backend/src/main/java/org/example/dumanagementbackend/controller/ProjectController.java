@@ -9,6 +9,7 @@ import org.example.dumanagementbackend.dto.project.ProjectRequest;
 import org.example.dumanagementbackend.dto.project.ProjectResponse;
 import org.example.dumanagementbackend.dto.project.ProjectTaskRequest;
 import org.example.dumanagementbackend.dto.project.ProjectTaskResponse;
+import org.example.dumanagementbackend.dto.project.ProjectTaskStatusUpdateRequest;
 import org.example.dumanagementbackend.service.ProjectService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -122,6 +124,15 @@ public class ProjectController {
             @Valid @RequestBody ProjectTaskRequest request
     ) {
         return ResponseEntity.ok(projectService.updateTask(id, taskId, request));
+    }
+
+    @PatchMapping("/{id}/tasks/{taskId}/status")
+    public ResponseEntity<ProjectTaskResponse> updateTaskStatus(
+            @PathVariable Long id,
+            @PathVariable Long taskId,
+            @Valid @RequestBody ProjectTaskStatusUpdateRequest request
+    ) {
+        return ResponseEntity.ok(projectService.updateTaskStatus(id, taskId, request.status()));
     }
 
     @DeleteMapping("/{id}/tasks/{taskId}")
