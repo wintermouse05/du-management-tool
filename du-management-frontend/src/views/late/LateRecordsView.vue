@@ -2,7 +2,8 @@
 import { ref, onMounted, watch } from 'vue'
 import { lateRecordsApi } from '@/api/lateRecords'
 import { membersApi } from '@/api/members'
-import { LateRecordStatus, UserStatus, type LateRecordRequest, type LateRecordResponse, type LateSummaryResponse, type MemberResponse } from '@/types'
+import { LateRecordStatus, type LateRecordRequest, type LateRecordResponse, type LateSummaryResponse } from '@/types'
+import { findMemberDisplayName, toMemberDisplayOption, type MemberDisplayOption } from '@/utils/memberDisplay'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -47,7 +48,7 @@ const monthCursor = ref(new Date(new Date().getFullYear(), new Date().getMonth()
 const dialog = ref(false)
 const form = ref<LateRecordRequest>({ userId: 0, recordDate: '', minutesLate: 0, reason: '' })
 const formDate = ref<Date|null>(null)
-const memberOptions = ref<MemberResponse[]>([])
+const memberOptions = ref<MemberDisplayOption[]>([])
 const membersLoading = ref(false)
 
 async function load() {
@@ -75,8 +76,8 @@ function moveMonth(offset: number) {
 async function loadMemberOptions() {
   membersLoading.value = true
   try {
-    const response = await membersApi.search({ page: 0, size: 1000, status: UserStatus.ACTIVE, sort: 'fullName,asc' })
-    memberOptions.value = response.data.content
+    const response = await membersApi.search({ page: 0, size: 1000, sort: 'fullName,asc' })
+    memberOptions.value = response.data.content.map(toMemberDisplayOption)
   } catch (e: any) {
     memberOptions.value = []
     toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(e, 'Failed to load members'), life: 3000 })
@@ -319,8 +320,9 @@ watch([activeTab, sumYear, sumMonth], async ([tab]) => {
           <Select
             v-model="form.userId"
             :options="memberOptions"
-            optionLabel="fullName"
+            optionLabel="displayName"
             optionValue="id"
+            optionDisabled="disabled"
             placeholder="Select user"
             filter
             :loading="membersLoading"
@@ -328,12 +330,12 @@ watch([activeTab, sumYear, sumMonth], async ([tab]) => {
           >
             <template #option="{ option }">
               <div style="display:flex;flex-direction:column;gap:2px;">
-                <span>{{ option.fullName }}</span>
+                <span>{{ option.displayName }}</span>
                 <span class="caption">{{ option.email }}</span>
               </div>
             </template>
             <template #value="{ value, placeholder }">
-              <span v-if="value">{{ memberOptions.find(member => member.id === value)?.fullName || 'Selected user' }}</span>
+              <span v-if="value">{{ findMemberDisplayName(memberOptions, value, 'Selected user') }}</span>
               <span v-else>{{ placeholder }}</span>
             </template>
           </Select>

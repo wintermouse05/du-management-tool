@@ -230,6 +230,13 @@ small,
   box-shadow: 0 0 0 2px rgba(27, 97, 201, 0.15) !important;
 }
 
+.p-multiselect-option.p-disabled .p-checkbox,
+.p-multiselect-option[aria-disabled="true"] .p-checkbox,
+.p-multiselect-item.p-disabled .p-checkbox,
+.p-multiselect-item[aria-disabled="true"] .p-checkbox {
+  display: none !important;
+}
+
 /* Tags */
 .p-tag {
   border-radius: 20px !important;

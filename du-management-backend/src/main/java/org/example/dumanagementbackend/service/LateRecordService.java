@@ -30,6 +30,7 @@ import org.example.dumanagementbackend.entity.PointHistory;
 import org.example.dumanagementbackend.entity.PointRule;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.enums.LateRecordStatus;
+import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.LateRecordRepository;
@@ -79,6 +80,9 @@ public class LateRecordService {
     public LateRecordResponse create(LateRecordRequest request) {
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw new BadRequestException("Cannot create late records for inactive users.");
+        }
 
         LateRecord record = new LateRecord();
         record.setUser(user);
@@ -116,7 +120,7 @@ public class LateRecordService {
 
     @Cacheable(
             cacheNames = "lateMonthlySummary",
-            key = "{#year,#month,#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString()}"
+            key = "{#year,#month,#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString(),T(org.example.dumanagementbackend.service.UserDisplayNameUtils).isCurrentUserAdmin()}"
     )
     public Page<LateSummaryResponse> getMonthlySummary(int year, int month, Pageable pageable) {
         Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
@@ -130,7 +134,7 @@ public class LateRecordService {
         List<LateSummaryResponse> summaries = grouped.entrySet().stream()
                 .map(entry -> new LateSummaryResponse(
                         entry.getKey().getId(),
-                        entry.getKey().getFullName(),
+                        UserDisplayNameUtils.displayName(entry.getKey()),
                         entry.getValue().size(),
                         entry.getValue().stream().mapToLong(LateRecord::getMinutesLate).sum()
                 ))
@@ -564,7 +568,7 @@ public class LateRecordService {
         return new LateRecordResponse(
                 record.getId(),
                 record.getUser().getId(),
-                record.getUser().getFullName(),
+                UserDisplayNameUtils.displayName(record.getUser()),
                 record.getRecordDate(),
                 record.getMinutesLate(),
                 record.getReason(),

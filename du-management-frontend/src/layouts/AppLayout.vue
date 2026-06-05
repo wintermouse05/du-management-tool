@@ -9,6 +9,7 @@ import { wsService } from '@/services/websocket'
 import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import NotificationBell from '@/components/NotificationBell.vue'
+import CelebrationBanner from '@/components/CelebrationBanner.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -343,6 +344,8 @@ const userInitial = computed(() => {
           <NotificationBell inline />
         </div>
       </header>
+
+      <CelebrationBanner v-if="auth.token" />
 
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">

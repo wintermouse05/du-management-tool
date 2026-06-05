@@ -289,6 +289,7 @@ export interface ProjectMemberResponse {
   username: string
   fullName: string
   email: string
+  status: UserStatus
   projectRole: ProjectRole
   projectRoleLabel: string
   participationStartTime: string
@@ -407,6 +408,7 @@ export interface EventAttendeeResponse {
   eventId: number
   userId: number
   fullName: string
+  userStatus: UserStatus
   rsvpStatus: RsvpStatus
   checkedIn: boolean
 }

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@neoconfetti/vue": "^2.2.1",
     "@primevue/themes": "^4.5.4",
     "@stomp/stompjs": "^7.0.0",
     "axios": "^1.15.1",

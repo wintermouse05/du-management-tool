@@ -100,52 +100,67 @@ public interface UserRepository extends JpaRepository<User, Long> {
             Pageable pageable
     );
 
-        @Query("""
-                        select u
-                            from User u
-                         where u.deletedAt is null
-                           and (:includeAdmins = true or lower(u.username) <> 'admin')
-                           and (:status is null or u.status = :status)
-                           and (
-                                        lower(u.username) like :q escape '\\'
-                                        or lower(u.email) like :q escape '\\'
-                                        or lower(u.fullName) like :q escape '\\'
-                           )
-                        """)
-        Page<User> searchMembers(
-                @Param("q") String q,
-                @Param("status") UserStatus status,
-                @Param("includeAdmins") boolean includeAdmins,
-                Pageable pageable
-        );
+    @Query("""
+            select u
+              from User u
+             where u.deletedAt is null
+               and (:includeAdmins = true or lower(u.username) <> lower(:excludedUsername))
+               and (:status is null or u.status = :status)
+             order by u.totalPoints desc
+            """)
+    Page<User> findLeaderboardUsers(
+            @Param("status") UserStatus status,
+            @Param("includeAdmins") boolean includeAdmins,
+            @Param("excludedUsername") String excludedUsername,
+            Pageable pageable
+    );
 
-        @Query("""
-                        select u
-                            from User u
-                         where u.deletedAt is null
-                           and (:includeAdmins = true or lower(u.username) <> 'admin')
-                           and (:status is null or u.status = :status)
-                           and (
-                                        lower(u.username) like :q escape '\\'
-                                        or lower(u.email) like :q escape '\\'
-                                        or lower(u.fullName) like :q escape '\\'
-                           )
-                         order by u.fullName asc
-                        """)
-        List<User> searchMembersForExport(
-                @Param("q") String q,
-                @Param("status") UserStatus status,
-                @Param("includeAdmins") boolean includeAdmins
-        );
+    @Query("""
+                    select u
+                        from User u
+                     where u.deletedAt is null
+                       and (:includeAdmins = true or lower(u.username) <> 'admin')
+                       and (:status is null or u.status = :status)
+                       and (
+                                    lower(u.username) like :q escape '\\'
+                                    or lower(u.email) like :q escape '\\'
+                                    or lower(u.fullName) like :q escape '\\'
+                       )
+                    """)
+    Page<User> searchMembers(
+            @Param("q") String q,
+            @Param("status") UserStatus status,
+            @Param("includeAdmins") boolean includeAdmins,
+            Pageable pageable
+    );
 
-        @Modifying(clearAutomatically = true, flushAutomatically = true)
-        @Query("""
-                        update User u
-                             set u.totalPoints = u.totalPoints + :delta
-                         where u.id = :userId
-                           and u.deletedAt is null
-                        """)
-        int incrementTotalPoints(@Param("userId") Long userId, @Param("delta") int delta);
+    @Query("""
+                    select u
+                        from User u
+                     where u.deletedAt is null
+                       and (:includeAdmins = true or lower(u.username) <> 'admin')
+                       and (:status is null or u.status = :status)
+                       and (
+                                    lower(u.username) like :q escape '\\'
+                                    or lower(u.email) like :q escape '\\'
+                                    or lower(u.fullName) like :q escape '\\'
+                       )
+                     order by u.fullName asc
+                    """)
+    List<User> searchMembersForExport(
+            @Param("q") String q,
+            @Param("status") UserStatus status,
+            @Param("includeAdmins") boolean includeAdmins
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+                    update User u
+                         set u.totalPoints = u.totalPoints + :delta
+                     where u.id = :userId
+                       and u.deletedAt is null
+                    """)
+    int incrementTotalPoints(@Param("userId") Long userId, @Param("delta") int delta);
 
     Optional<User> findByFullNameAndDeletedAtIsNull(String fullName);
 

@@ -380,8 +380,9 @@ public class ProjectService {
                 member.getProject().getId(),
                 user.getId(),
                 user.getUsername(),
-                user.getFullName(),
+                UserDisplayNameUtils.displayName(user),
                 user.getEmail(),
+                user.getStatus(),
                 member.getProjectRole(),
                 member.getProjectRole().getLabel(),
                 member.getParticipationStartTime(),
@@ -394,7 +395,7 @@ public class ProjectService {
                 .map(user -> new ProjectTaskAssigneeResponse(
                         user.getId(),
                         user.getUsername(),
-                        user.getFullName()
+                        UserDisplayNameUtils.displayName(user)
                 ))
                 .toList();
         return new ProjectTaskResponse(
@@ -415,7 +416,7 @@ public class ProjectService {
         return new AvailableProjectMemberResponse(
                 user.getId(),
                 user.getUsername(),
-                user.getFullName(),
+                UserDisplayNameUtils.displayName(user),
                 user.getEmail(),
                 user.getRole() != null ? user.getRole().getName() : null
         );

@@ -4,10 +4,11 @@ import { useAuthStore } from '@/stores/auth'
 import { surveysApi } from '@/api/surveys'
 import { membersApi } from '@/api/members'
 import { notificationsApi } from '@/api/notifications'
-import { UserStatus, type SurveyResponse, type SurveyRequest, type SurveyProgressResponse, type MemberResponse } from '@/types'
+import { type SurveyResponse, type SurveyRequest, type SurveyProgressResponse } from '@/types'
 import { wsService } from '@/services/websocket'
 import { formatLocalDateTime, parseApiDate, toLocalDateTime } from '@/utils/datetime'
 import { getApiErrorDetail } from '@/utils/apiError'
+import { toMemberDisplayOption, type MemberDisplayOption } from '@/utils/memberDisplay'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -27,7 +28,7 @@ const dialogVisible = ref(false); const editing = ref(false); const editId = ref
 const form = ref<SurveyRequest>({ title: '', link: '', deadline: '' })
 const formDate = ref<Date|null>(null)
 const formAssignUserIds = ref<number[]>([])
-const assignUsers = ref<MemberResponse[]>([])
+const assignUsers = ref<MemberDisplayOption[]>([])
 const assignOptionsLoading = ref(false)
 const progressDialog = ref(false); const progress = ref<SurveyProgressResponse|null>(null)
 const progressBySurveyId = ref<Record<number, SurveyProgressResponse>>({})
@@ -73,10 +74,10 @@ function onPage(e: any) { pg.value = e.page; rows.value = e.rows; load() }
 async function fetchAssignTargets() {
   assignOptionsLoading.value = true
   try {
-    const usersRes = await membersApi.search({ size: 1000, status: UserStatus.ACTIVE })
-    assignUsers.value = usersRes.data.content.filter(
-      u => (u.username || '').toLowerCase() !== ADMIN_USERNAME,
-    )
+    const usersRes = await membersApi.search({ size: 1000 })
+    assignUsers.value = usersRes.data.content
+      .filter(u => (u.username || '').toLowerCase() !== ADMIN_USERNAME)
+      .map(toMemberDisplayOption)
   } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load members', life: 3000 })
   } finally {
@@ -318,17 +319,18 @@ onUnmounted(() => {
           <MultiSelect
             v-model="formAssignUserIds"
             :options="assignUsers"
-            option-label="fullName"
+            option-label="displayName"
             option-value="id"
+            option-disabled="disabled"
             placeholder="Select members"
             filter
             display="chip"
-            :filter-fields="['username', 'fullName', 'email']"
+            :filter-fields="['username', 'fullName', 'displayName', 'email']"
             :loading="assignOptionsLoading"
             fluid
           >
             <template #option="{ option }">
-              <div>{{ option.fullName }} <span style="color:var(--theme-text-weak);font-size:12px;">(@{{ option.username }})</span></div>
+              <div>{{ option.displayName }} <span style="color:var(--theme-text-weak);font-size:12px;">(@{{ option.username }})</span></div>
             </template>
           </MultiSelect>
         </div>
@@ -410,4 +412,3 @@ onUnmounted(() => {
   padding: 4px 10px;
 }
 </style>
-

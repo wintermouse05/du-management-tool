@@ -10,10 +10,10 @@ import type {
   LuckyDrawPrizeResponse,
   LuckyDrawSessionResponse,
   LuckyDrawWinnerResponse,
-  MemberResponse,
 } from '@/types'
 import { wsService } from '@/services/websocket'
 import { getApiErrorDetail } from '@/utils/apiError'
+import { toMemberDisplayOption, type MemberDisplayOption } from '@/utils/memberDisplay'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -38,7 +38,7 @@ const selectedPrize = ref<number | null>(null)
 const winners = ref<LuckyDrawWinnerResponse[]>([])
 const participants = ref<LuckyDrawParticipantResponse[]>([])
 const sessionWinners = ref<LuckyDrawWinnerResponse[]>([])
-const memberOptions = ref<MemberResponse[]>([])
+const memberOptions = ref<MemberDisplayOption[]>([])
 const loading = ref(false)
 const winnersLoading = ref(false)
 
@@ -93,6 +93,7 @@ const membersInPointRange = computed(() => {
   const min = minPointFilter.value
   const max = maxPointFilter.value
   return memberOptions.value.filter((member) => {
+    if (member.inactive) return false
     const points = member.totalPoints ?? 0
     if (min != null && points < min) return false
     if (max != null && points > max) return false
@@ -117,8 +118,8 @@ onMounted(async () => {
 
   if (auth.isAdminOrHR) {
     try {
-      const memberRes = await membersApi.search({ size: 500, status: 'ACTIVE' })
-      memberOptions.value = memberRes.data.content
+      const memberRes = await membersApi.search({ size: 500 })
+      memberOptions.value = memberRes.data.content.map(toMemberDisplayOption)
     } catch {}
   }
 
@@ -611,16 +612,17 @@ function addParticipantsByPointRange() {
         <MultiSelect
           v-model="selectedParticipantIds"
           :options="memberOptions"
-          optionLabel="fullName"
+          optionLabel="displayName"
           optionValue="id"
+          optionDisabled="disabled"
           filter
           display="chip"
-          placeholder="Select active members"
+          placeholder="Select members"
           fluid
         >
           <template #option="{ option }">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);width:100%;">
-              <span>{{ option.fullName }}</span>
+              <span>{{ option.displayName }}</span>
               <span style="font-size:12px;color:var(--theme-text-weak);">{{ option.totalPoints ?? 0 }} pts</span>
             </div>
           </template>

@@ -3,8 +3,9 @@ import { ref, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { gamificationApi } from '@/api/gamification'
 import { membersApi } from '@/api/members'
-import type { PointRuleResponse, PointHistoryResponse, MemberResponse } from '@/types'
+import type { PointRuleResponse, PointHistoryResponse } from '@/types'
 import { getApiErrorDetail } from '@/utils/apiError'
+import { findMemberDisplayName, toMemberDisplayOption, type MemberDisplayOption } from '@/utils/memberDisplay'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -23,7 +24,7 @@ import { useToast } from 'primevue/usetoast'
 const auth = useAuthStore()
 const toast = useToast()
 const activeTab = ref('0')
-const members = ref<MemberResponse[]>([])
+const members = ref<MemberDisplayOption[]>([])
 const membersLoading = ref(false)
 
 // Rules
@@ -48,7 +49,7 @@ async function loadMembers() {
   membersLoading.value = true
   try {
     const response = await membersApi.search({ page: 0, size: 1000, sort: 'fullName,asc' })
-    members.value = response.data.content
+    members.value = response.data.content.map(toMemberDisplayOption)
   } catch {
     members.value = []
   } finally {
@@ -197,18 +198,19 @@ onMounted(async () => {
                 <Select
                   v-model="adjustForm.userId"
                   :options="members"
-                  optionLabel="fullName"
+                  optionLabel="displayName"
                   optionValue="id"
+                  optionDisabled="disabled"
                   placeholder="Select member"
                   filter
                   :loading="membersLoading"
                   fluid
                 >
                   <template #option="{ option }">
-                    <div>{{ option.fullName }} <span style="color:var(--theme-text-weak);font-size:12px;">({{ option.username }})</span></div>
+                    <div>{{ option.displayName }} <span style="color:var(--theme-text-weak);font-size:12px;">({{ option.username }})</span></div>
                   </template>
                   <template #value="{ value }">
-                    <span v-if="value">{{ members.find(member => member.id === value)?.fullName || 'Selected member' }}</span>
+                    <span v-if="value">{{ findMemberDisplayName(members, value) }}</span>
                     <span v-else style="color:var(--theme-text-weak);">Select member</span>
                   </template>
                 </Select>
@@ -233,18 +235,19 @@ onMounted(async () => {
               <Select
                 v-model="historyUserId"
                 :options="members"
-                optionLabel="fullName"
+                optionLabel="displayName"
                 optionValue="id"
+                optionDisabled="disabled"
                 placeholder="Select member"
                 filter
                 :loading="membersLoading"
                 style="min-width:260px;"
               >
                 <template #option="{ option }">
-                  <div>{{ option.fullName }} <span style="color:var(--theme-text-weak);font-size:12px;">({{ option.username }})</span></div>
+                  <div>{{ option.displayName }} <span style="color:var(--theme-text-weak);font-size:12px;">({{ option.username }})</span></div>
                 </template>
                 <template #value="{ value }">
-                  <span v-if="value">{{ members.find(member => member.id === value)?.fullName || 'Selected member' }}</span>
+                  <span v-if="value">{{ findMemberDisplayName(members, value) }}</span>
                   <span v-else style="color:var(--theme-text-weak);">Select member</span>
                 </template>
               </Select>

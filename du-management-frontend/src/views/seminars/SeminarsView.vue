@@ -4,9 +4,10 @@ import { useAuthStore } from '@/stores/auth'
 import { seminarsApi } from '@/api/seminars'
 import { membersApi } from '@/api/members'
 import type { SeminarResponse, SeminarRequest, SeminarVoteResponse, SeminarVoteSummaryResponse } from '@/types'
-import { SeminarStatus, VoteType, UserStatus } from '@/types'
+import { SeminarStatus, UserStatus, VoteType } from '@/types'
 import { formatLocalDateTime, parseApiDate, toLocalDateTime } from '@/utils/datetime'
 import { getApiErrorDetail } from '@/utils/apiError'
+import { formatMemberName } from '@/utils/memberDisplay'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -34,7 +35,7 @@ const editId = ref<number | null>(null)
 const form = ref<SeminarRequest>({ title: '', description: '', scheduledAt: '', status: SeminarStatus.PENDING })
 const formDate = ref<Date | null>(null)
 
-const speakerOptions = ref<Array<{ label: string; value: number }>>([])
+const speakerOptions = ref<Array<{ label: string; value: number; disabled: boolean }>>([])
 
 const votesDialog = ref(false)
 const votes = ref<SeminarVoteResponse[]>([])
@@ -122,7 +123,11 @@ function openEdit(s: SeminarResponse) {
   resetMaterialSelection()
 
   if (s.speakerId && !speakerOptions.value.some(option => option.value === s.speakerId)) {
-    speakerOptions.value.unshift({ label: s.speakerName || `User #${s.speakerId}`, value: s.speakerId })
+    speakerOptions.value.unshift({
+      label: s.speakerName || `User #${s.speakerId}`,
+      value: s.speakerId,
+      disabled: s.speakerName?.endsWith(' (inactive)') || false,
+    })
   }
 
   dialogVisible.value = true
@@ -130,10 +135,11 @@ function openEdit(s: SeminarResponse) {
 
 async function loadSpeakers() {
   try {
-    const res = await membersApi.search({ page: 0, size: 200, status: UserStatus.ACTIVE })
+    const res = await membersApi.search({ page: 0, size: 200 })
     speakerOptions.value = res.data.content.map(member => ({
-      label: `${member.fullName} (${member.username})`,
+      label: `${formatMemberName(member)} (${member.username})`,
       value: member.id,
+      disabled: member.status === UserStatus.INACTIVE,
     }))
   } catch {
     speakerOptions.value = []
@@ -504,6 +510,7 @@ onMounted(() => {
             :options="speakerOptions"
             optionLabel="label"
             optionValue="value"
+            optionDisabled="disabled"
             placeholder="Select speaker"
             showClear
             fluid

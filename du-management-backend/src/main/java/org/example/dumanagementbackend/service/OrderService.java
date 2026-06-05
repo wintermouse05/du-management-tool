@@ -18,6 +18,7 @@ import org.example.dumanagementbackend.entity.Restaurant;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.UserOrder;
 import org.example.dumanagementbackend.entity.enums.OrderSessionStatus;
+import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.MenuItemRepository;
@@ -268,6 +269,9 @@ public class OrderService {
         if (users.size() != uniqueUserIds.size()) {
             throw new BadRequestException("Some userIds do not exist");
         }
+        if (users.stream().anyMatch(user -> user.getStatus() == UserStatus.INACTIVE)) {
+            throw new BadRequestException("Cannot place orders for inactive users.");
+        }
         Map<Long, User> userById = users.stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
         ensureUsersHaveNoOrders(session.getId(), uniqueUserIds);
@@ -416,7 +420,7 @@ public class OrderService {
                 sessionName(order.getSession()),
                 order.getSession().getStatus(),
                 order.getUser().getId(),
-                order.getUser().getFullName(),
+                UserDisplayNameUtils.displayName(order.getUser()),
                 orderedByFullName,
                 order.getItem().getId(),
                 order.getItem().getName(),
@@ -452,7 +456,7 @@ public class OrderService {
 
         Map<String, String> result = new HashMap<>();
         userRepository.findByUsernameIn(cleanedUsernames)
-                .forEach(user -> result.put(user.getUsername(), user.getFullName()));
+                .forEach(user -> result.put(user.getUsername(), UserDisplayNameUtils.displayName(user)));
         return result;
     }
 
@@ -564,8 +568,12 @@ public class OrderService {
     }
 
     private User requireUser(Long userId) {
-        return userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + userId));
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw new BadRequestException("Cannot place orders for inactive users.");
+        }
+        return user;
     }
 
     private UserOrder requireOrder(Long orderId) {

@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { eventsApi } from '@/api/events'
 import type { EventResponse, EventAttendeeResponse } from '@/types'
-import { RsvpStatus } from '@/types'
+import { RsvpStatus, UserStatus } from '@/types'
 import { getApiErrorDetail } from '@/utils/apiError'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -202,7 +202,12 @@ onMounted(() => {
         </Column>
         <Column v-if="auth.isAdminOrHR" header="Actions" style="width:120px">
           <template #body="{ data }">
-            <Button v-if="!data.checkedIn" label="Check In" size="small" @click="handleCheckIn(data.userId)" />
+            <Button
+              v-if="!data.checkedIn && data.userStatus !== UserStatus.INACTIVE"
+              label="Check In"
+              size="small"
+              @click="handleCheckIn(data.userId)"
+            />
           </template>
         </Column>
       </DataTable>

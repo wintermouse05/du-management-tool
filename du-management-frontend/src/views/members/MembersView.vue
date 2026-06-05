@@ -16,6 +16,7 @@ import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import { parseApiDate, toLocalDate } from '@/utils/datetime'
 import { getApiErrorDetail } from '@/utils/apiError'
+import { formatMemberName } from '@/utils/memberDisplay'
 
 const auth = useAuthStore()
 const toast = useToast()
@@ -340,7 +341,9 @@ onMounted(() => { loadMembers(); loadRoles() })
         <template #empty>
           No Member found. Please adjust filters or create a new Member.
         </template>
-        <Column field="fullName" header="Name" />
+        <Column field="fullName" header="Name">
+          <template #body="{ data }">{{ formatMemberName(data) }}</template>
+        </Column>
         <Column field="roleName" header="Role">
           <template #body="{ data }"><Tag :value="data.roleName" :severity="data.roleName === 'ADMIN' ? 'danger' : data.roleName === 'HR' ? 'warn' : 'info'" /></template>
         </Column>

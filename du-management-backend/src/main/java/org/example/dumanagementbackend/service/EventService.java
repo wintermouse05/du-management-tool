@@ -9,6 +9,7 @@ import org.example.dumanagementbackend.entity.EventAttendee;
 import org.example.dumanagementbackend.entity.EventAttendeeId;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.enums.RsvpStatus;
+import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
 import org.example.dumanagementbackend.repository.EventAttendeeRepository;
@@ -117,6 +118,9 @@ public class EventService {
         Event event = getEntityById(eventId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + userId));
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw new BadRequestException("Cannot check in inactive users.");
+        }
 
         EventAttendeeId id = new EventAttendeeId();
         id.setEventId(eventId);
@@ -221,7 +225,8 @@ public class EventService {
         return new EventAttendeeResponse(
                 attendee.getEvent().getId(),
                 attendee.getUser().getId(),
-                attendee.getUser().getFullName(),
+                UserDisplayNameUtils.displayName(attendee.getUser()),
+                attendee.getUser().getStatus(),
                 attendee.getRsvpStatus(),
                 attendee.isCheckedIn()
         );
@@ -251,7 +256,7 @@ public class EventService {
         userRepository.findByUsernameIn(usernames)
                 .forEach(user -> creatorNames.put(
                         user.getUsername(),
-                        user.getFullName() != null && !user.getFullName().isBlank() ? user.getFullName() : user.getUsername()
+                        UserDisplayNameUtils.displayName(user)
                 ));
         return creatorNames;
     }

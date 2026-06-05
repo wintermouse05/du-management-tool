@@ -60,7 +60,11 @@ public class GamificationController {
 
     @GetMapping("/leaderboard")
     public ResponseEntity<Page<LeaderboardEntryResponse>> leaderboard(Pageable pageable, Authentication authentication) {
-        return ResponseEntity.ok(gamificationService.leaderboard(pageable, isCurrentUserAdminAccount(authentication)));
+        return ResponseEntity.ok(gamificationService.leaderboard(
+                pageable,
+                isCurrentUserAdminAccount(authentication),
+                isCurrentUserAdminRole(authentication)
+        ));
     }
 
     private boolean isCurrentUserAdminAccount(Authentication authentication) {
@@ -68,5 +72,12 @@ public class GamificationController {
                 && authentication.isAuthenticated()
                 && authentication.getName() != null
                 && "admin".equalsIgnoreCase(authentication.getName());
+    }
+
+    private boolean isCurrentUserAdminRole(Authentication authentication) {
+        return authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 }

@@ -173,7 +173,7 @@ public class SeminarService {
         return new SeminarVoteResponse(
                 saved.getSeminar().getId(),
                 saved.getUser().getId(),
-                saved.getUser().getFullName(),
+                UserDisplayNameUtils.displayName(saved.getUser()),
                 saved.getVoteType()
         );
     }
@@ -184,7 +184,7 @@ public class SeminarService {
                 .map(v -> new SeminarVoteResponse(
                         v.getSeminar().getId(),
                         v.getUser().getId(),
-                        v.getUser().getFullName(),
+                        UserDisplayNameUtils.displayName(v.getUser()),
                         v.getVoteType()
                 ));
     }
@@ -247,7 +247,7 @@ public class SeminarService {
 
     private SeminarResponse toResponse(Seminar seminar, VoteType currentUserVote) {
         Long speakerId = seminar.getSpeaker() != null ? seminar.getSpeaker().getId() : null;
-        String speakerName = seminar.getSpeaker() != null ? seminar.getSpeaker().getFullName() : null;
+        String speakerName = seminar.getSpeaker() != null ? UserDisplayNameUtils.displayName(seminar.getSpeaker()) : null;
         return new SeminarResponse(
                 seminar.getId(),
                 speakerId,

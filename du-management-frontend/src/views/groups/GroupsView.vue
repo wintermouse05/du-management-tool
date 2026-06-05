@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import { groupsApi } from '@/api/groups'
 import { membersApi } from '@/api/members'
-import type { GroupResponse, GroupRequest, GroupMemberResponse, MemberResponse } from '@/types'
+import { UserStatus, type GroupResponse, type GroupRequest, type GroupMemberResponse } from '@/types'
 import { getApiErrorDetail } from '@/utils/apiError'
+import { toMemberDisplayOption, type MemberDisplayOption } from '@/utils/memberDisplay'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -16,6 +18,7 @@ import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 
 const toast = useToast()
+const auth = useAuthStore()
 
 const groups = ref<GroupResponse[]>([])
 const loading = ref(false)
@@ -31,7 +34,7 @@ const members = ref<GroupMemberResponse[]>([])
 const membersLoading = ref(false)
 
 const addMemberDialog = ref(false)
-const availableUsers = ref<MemberResponse[]>([])
+const availableUsers = ref<MemberDisplayOption[]>([])
 const selectedUserId = ref<number | null>(null)
 
 const deleteConfirmDialog = ref(false)
@@ -115,7 +118,9 @@ async function openAddMember() {
   selectedUserId.value = null
   try {
     const res = await membersApi.search({ size: 1000 })
-    availableUsers.value = res.data.content.filter(u => u.status === 'ACTIVE')
+    availableUsers.value = res.data.content
+      .filter(u => auth.isAdmin || u.status === UserStatus.ACTIVE)
+      .map(toMemberDisplayOption)
   } catch {}
 }
 
@@ -194,7 +199,7 @@ onMounted(load)
         </div>
         <div class="form-field" style="display:flex;align-items:center;gap:var(--space-3);">
           <Checkbox v-model="form.allGroup" :binary="true" input-id="allGroup" />
-          <label for="allGroup">All Users Group  Edynamically includes every active user</label>
+          <label for="allGroup">All Users Group</label>
         </div>
       </div>
       <template #footer>
@@ -240,15 +245,16 @@ onMounted(load)
         <Select
           v-model="selectedUserId"
           :options="availableUsers"
-          option-label="fullName"
+          option-label="displayName"
           option-value="id"
+          option-disabled="disabled"
           placeholder="Search and select a user"
           filter
-          :filter-fields="['username', 'fullName', 'email']"
+          :filter-fields="['username', 'fullName', 'displayName', 'email']"
           fluid
         >
           <template #option="{ option }">
-            <div>{{ option.fullName }} <span style="color:var(--theme-text-weak);font-size:12px;">(@{{ option.username }})</span></div>
+            <div>{{ option.displayName }} <span style="color:var(--theme-text-weak);font-size:12px;">(@{{ option.username }})</span></div>
           </template>
         </Select>
       </div>

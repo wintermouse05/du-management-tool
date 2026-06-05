@@ -75,7 +75,7 @@ public class SurveyService {
     }
 
     @Transactional
-    @CacheEvict(cacheNames = "surveyProgress", key = "#surveyId", beforeInvocation = true)
+    @CacheEvict(cacheNames = "surveyProgress", allEntries = true, beforeInvocation = true)
     public SurveyProgressResponse assignToUser(Long surveyId, Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + userId));
@@ -87,7 +87,7 @@ public class SurveyService {
     }
 
     @Transactional
-    @CacheEvict(cacheNames = "surveyProgress", key = "#surveyId", beforeInvocation = true)
+    @CacheEvict(cacheNames = "surveyProgress", allEntries = true, beforeInvocation = true)
     public SurveyProgressResponse replaceAssignments(Long surveyId, SurveyAssignmentUpdateRequest request) {
         Survey survey = getEntityById(surveyId);
 
@@ -172,7 +172,7 @@ public class SurveyService {
     }
 
     @Transactional
-    @CacheEvict(cacheNames = "surveyProgress", key = "#surveyId", beforeInvocation = true)
+    @CacheEvict(cacheNames = "surveyProgress", allEntries = true, beforeInvocation = true)
     public SurveyProgressResponse markCompletion(Long surveyId, SurveyCompletionRequest request) {
         Survey survey = getEntityById(surveyId);
         
@@ -203,7 +203,7 @@ public class SurveyService {
         return progress;
     }
 
-    @Cacheable(cacheNames = "surveyProgress", key = "#surveyId")
+    @Cacheable(cacheNames = "surveyProgress", key = "{#surveyId,T(org.example.dumanagementbackend.service.UserDisplayNameUtils).isCurrentUserAdmin()}")
     public SurveyProgressResponse getProgress(Long surveyId) {
         getEntityById(surveyId);
         List<UserSurvey> assignments = userSurveyRepository.findBySurveyId(surveyId);
@@ -212,7 +212,7 @@ public class SurveyService {
                 .filter(assignment -> !isAdminAccount(assignment.getUser()))
                 .map(assignment -> new SurveyAssignmentStatusResponse(
                         assignment.getUser().getId(),
-                        assignment.getUser().getFullName(),
+                        UserDisplayNameUtils.displayName(assignment.getUser()),
                         assignment.isCompleted()
                 ))
                 .sorted(Comparator.comparing(

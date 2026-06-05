@@ -107,7 +107,7 @@ public class LuckyDrawService {
         }
 
         return userRepository.findAllById(session.getParticipantIds()).stream()
-                .map(u -> new LuckyDrawParticipantResponse(u.getId(), u.getFullName(), u.getEmail()))
+                .map(u -> new LuckyDrawParticipantResponse(u.getId(), UserDisplayNameUtils.displayName(u), u.getEmail()))
                 .toList();
     }
 
@@ -237,7 +237,7 @@ public class LuckyDrawService {
                 winner.getPrize().getId(),
                 winner.getPrize().getPrizeName(),
                 winner.getUser().getId(),
-                winner.getUser().getFullName()
+                UserDisplayNameUtils.displayName(winner.getUser())
         );
     }
 }

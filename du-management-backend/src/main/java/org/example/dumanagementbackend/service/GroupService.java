@@ -78,6 +78,9 @@ public class GroupService {
         }
         User user = userRepository.findByIdAndDeletedAtIsNull(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw new BadRequestException("Cannot add inactive users to groups");
+        }
         if (isAdminAccount(user)) {
             throw new BadRequestException("Cannot add admin account to member lists");
         }
@@ -108,10 +111,8 @@ public class GroupService {
     public List<User> getMembers(Long groupId) {
         UserGroup group = getEntity(groupId);
         if (group.isAllGroup()) {
-            return userRepository.findByStatusAndUsernameIgnoreCaseNotOrderByTotalPointsDesc(
-                    UserStatus.ACTIVE,
-                    SystemAccountUtils.ADMIN_USERNAME
-            );
+            UserStatus visibleStatus = UserDisplayNameUtils.isCurrentUserAdmin() ? null : UserStatus.ACTIVE;
+            return userRepository.searchMembersForExport("%", visibleStatus, false);
         }
         return memberRepository.findByGroupId(groupId).stream()
                 .map(GroupMember::getUser)
@@ -127,7 +128,7 @@ public class GroupService {
     public List<org.example.dumanagementbackend.dto.group.GroupMemberResponse> getMemberResponses(Long groupId) {
         return getMembers(groupId).stream()
                 .map(u -> new org.example.dumanagementbackend.dto.group.GroupMemberResponse(
-                        u.getId(), u.getUsername(), u.getFullName(), u.getEmail()))
+                        u.getId(), u.getUsername(), UserDisplayNameUtils.displayName(u), u.getEmail()))
                 .toList();
     }
 
@@ -145,10 +146,14 @@ public class GroupService {
     private GroupResponse toResponse(UserGroup group) {
         int count;
         if (group.isAllGroup()) {
-            count = (int) userRepository.countByStatusAndUsernameIgnoreCaseNot(
-                    UserStatus.ACTIVE,
-                    SystemAccountUtils.ADMIN_USERNAME
-            );
+            if (UserDisplayNameUtils.isCurrentUserAdmin()) {
+                count = userRepository.searchMembersForExport("%", null, false).size();
+            } else {
+                count = (int) userRepository.countByStatusAndUsernameIgnoreCaseNot(
+                        UserStatus.ACTIVE,
+                        SystemAccountUtils.ADMIN_USERNAME
+                );
+            }
         } else {
             count = getMembers(group.getId()).size();
         }

@@ -62,6 +62,9 @@ public class GamificationService {
     public PointHistoryResponse adjustManual(ManualPointRequest request) {
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id=" + request.userId()));
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw new BadRequestException("Cannot adjust points for inactive users.");
+        }
 
         PointRule rule = null;
         Integer points = request.pointsChanged();
@@ -98,19 +101,18 @@ public class GamificationService {
 
     @Cacheable(
             cacheNames = "gamificationLeaderboard",
-            key = "{#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString(),#includeAdmins}"
+            key = "{#pageable.pageNumber,#pageable.pageSize,#pageable.sort.toString(),#includeAdmins,#includeInactive}"
     )
-    public Page<LeaderboardEntryResponse> leaderboard(Pageable pageable, boolean includeAdmins) {
+    public Page<LeaderboardEntryResponse> leaderboard(Pageable pageable, boolean includeAdmins, boolean includeInactive) {
         Pageable resolvedPageable = PaginationUtils.toZeroBasedPageable(pageable);
-        Page<User> users = includeAdmins
-                ? userRepository.findByStatusOrderByTotalPointsDesc(UserStatus.ACTIVE, resolvedPageable)
-                : userRepository.findByStatusAndUsernameIgnoreCaseNotOrderByTotalPointsDesc(
-                        UserStatus.ACTIVE,
-                        SystemAccountUtils.ADMIN_USERNAME,
-                        resolvedPageable
-                );
+        Page<User> users = userRepository.findLeaderboardUsers(
+                includeInactive ? null : UserStatus.ACTIVE,
+                includeAdmins,
+                SystemAccountUtils.ADMIN_USERNAME,
+                resolvedPageable
+        );
         return users
-                .map(user -> new LeaderboardEntryResponse(user.getId(), user.getFullName(), user.getTotalPoints()));
+                .map(user -> new LeaderboardEntryResponse(user.getId(), UserDisplayNameUtils.displayName(user), user.getTotalPoints()));
     }
 
     @Transactional
@@ -143,7 +145,7 @@ public class GamificationService {
         return new PointHistoryResponse(
                 history.getId(),
                 history.getUser().getId(),
-                history.getUser().getFullName(),
+                UserDisplayNameUtils.displayName(history.getUser()),
                 history.getRule() != null ? history.getRule().getId() : null,
                 history.getRule() != null ? history.getRule().getActionCode() : null,
                 history.getPointsChanged(),

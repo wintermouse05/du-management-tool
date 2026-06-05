@@ -9,7 +9,6 @@ import {
   ProjectStatus,
   TaskStatus,
   UserStatus,
-  type MemberResponse,
   type ProjectMemberRequest,
   type ProjectMemberResponse,
   type ProjectResponse,
@@ -18,6 +17,7 @@ import {
 } from '@/types'
 import { formatLocalDateTime, parseApiDate, toLocalDateTime } from '@/utils/datetime'
 import { getApiErrorDetail } from '@/utils/apiError'
+import { formatMemberName, toMemberDisplayOption } from '@/utils/memberDisplay'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -31,6 +31,16 @@ import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 
 type DetailTab = 'members' | 'tasks'
+type MemberSelectOption = {
+  id: number
+  fullName: string
+  displayName: string
+  username: string
+  email: string
+  status: UserStatus
+  disabled: boolean
+  inactive: boolean
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -49,7 +59,7 @@ const activeTab = ref<DetailTab>('members')
 const memberDialog = ref(false)
 const memberEditing = ref(false)
 const editMemberUserId = ref<number | null>(null)
-const availableUsers = ref<MemberResponse[]>([])
+const availableUsers = ref<MemberSelectOption[]>([])
 const usersLoading = ref(false)
 const memberSaving = ref(false)
 const memberForm = ref<ProjectMemberRequest>({
@@ -107,8 +117,12 @@ const memberOptionsForAdd = computed(() => {
 const taskAssigneeOptions = computed(() => members.value.map(member => ({
   id: member.userId,
   fullName: member.fullName,
+  displayName: formatMemberName(member),
   username: member.username,
   email: member.email,
+  status: member.status,
+  disabled: member.status === UserStatus.INACTIVE,
+  inactive: member.status === UserStatus.INACTIVE,
 })))
 
 const canSubmitMember = computed(() => {
@@ -183,7 +197,9 @@ async function fetchAvailableUsers() {
   usersLoading.value = true
   try {
     const response = await membersApi.search({ size: 1000, status: UserStatus.ACTIVE })
-    availableUsers.value = response.data.content.filter(user => (user.username || '').toLowerCase() !== 'admin')
+    availableUsers.value = response.data.content
+      .filter(user => (user.username || '').toLowerCase() !== 'admin')
+      .map(toMemberDisplayOption)
   } catch (err: any) {
     toast.add({ severity: 'error', summary: 'Error', detail: getApiErrorDetail(err, 'Failed to load members'), life: 3500 })
   } finally {
@@ -219,6 +235,7 @@ async function openEditMember(member: ProjectMemberResponse) {
   memberEndDate.value = parseApiDate(member.expectedEndTime)
   memberDialog.value = true
   await fetchAvailableUsers()
+  ensureAvailableMemberOption(member)
 }
 
 async function saveMember() {
@@ -371,6 +388,26 @@ function resolveFormDate(value: unknown): Date | null {
 
 function fmtDate(value: string) {
   return formatLocalDateTime(value)
+}
+
+function toProjectMemberOption(member: ProjectMemberResponse): MemberSelectOption {
+  const inactive = member.status === UserStatus.INACTIVE
+  return {
+    id: member.userId,
+    fullName: member.fullName,
+    displayName: formatMemberName(member),
+    username: member.username,
+    email: member.email,
+    status: member.status,
+    disabled: inactive,
+    inactive,
+  }
+}
+
+function ensureAvailableMemberOption(member: ProjectMemberResponse) {
+  if (!availableUsers.value.some(option => option.id === member.userId)) {
+    availableUsers.value = [toProjectMemberOption(member), ...availableUsers.value]
+  }
 }
 
 function formatTaskAssignees(task: ProjectTaskResponse) {
@@ -550,17 +587,18 @@ onMounted(loadAll)
           <Select
             v-model="memberForm.userId"
             :options="memberEditing ? availableUsers : memberOptionsForAdd"
-            option-label="fullName"
+            option-label="displayName"
             option-value="id"
+            option-disabled="disabled"
             placeholder="Select member"
             filter
-            :filter-fields="['username', 'fullName', 'email']"
+            :filter-fields="['username', 'fullName', 'displayName', 'email']"
             :loading="usersLoading"
             :disabled="memberEditing"
             fluid
           >
             <template #option="{ option }">
-              <div>{{ option.fullName }} <span class="select-hint">(@{{ option.username }})</span></div>
+              <div>{{ option.displayName }} <span class="select-hint">(@{{ option.username }})</span></div>
             </template>
           </Select>
         </div>
@@ -602,16 +640,17 @@ onMounted(loadAll)
           <MultiSelect
             v-model="taskForm.assigneeIds"
             :options="taskAssigneeOptions"
-            option-label="fullName"
+            option-label="displayName"
             option-value="id"
+            option-disabled="disabled"
             placeholder="Select project members"
             filter
             display="chip"
-            :filter-fields="['username', 'fullName', 'email']"
+            :filter-fields="['username', 'fullName', 'displayName', 'email']"
             fluid
           >
             <template #option="{ option }">
-              <div>{{ option.fullName }} <span class="select-hint">(@{{ option.username }})</span></div>
+              <div>{{ option.displayName }} <span class="select-hint">(@{{ option.username }})</span></div>
             </template>
           </MultiSelect>
         </div>

@@ -10,15 +10,15 @@ import {
   formatLocalDateTime,
   toLocalDateTime,
 } from '@/utils/datetime'
+import { toMemberDisplayOption, type MemberDisplayOption } from '@/utils/memberDisplay'
 import type {
-  MemberResponse,
   MenuItemResponse,
   OrderSessionResponse,
   OrderSessionSummaryResponse,
   RestaurantResponse,
   UserOrderResponse,
 } from '@/types'
-import { OrderSessionStatus, UserStatus } from '@/types'
+import { OrderSessionStatus } from '@/types'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -309,7 +309,7 @@ function isDeadlineExpired(deadline: string | null | undefined) {
 }
 
 // ==================== Orders ====================
-const members = ref<MemberResponse[]>([])
+const members = ref<MemberDisplayOption[]>([])
 const orders = ref<UserOrderResponse[]>([])
 const ordLoading = ref(false)
 const selectedSession = ref<number | null>(null)
@@ -422,8 +422,8 @@ function canManageOrderActions(order: UserOrderResponse) {
 
 async function loadMembers() {
   try {
-    const response = await membersApi.search({ page: 0, size: 500, status: UserStatus.ACTIVE })
-    members.value = response.data.content
+    const response = await membersApi.search({ page: 0, size: 500 })
+    members.value = response.data.content.map(toMemberDisplayOption)
   } catch {
     members.value = []
   }
@@ -970,17 +970,18 @@ onUnmounted(() => {
           <MultiSelect
             v-model="orderForm.userIds"
             :options="availableMembersForOrder"
-            optionLabel="fullName"
+            optionLabel="displayName"
             optionValue="id"
+            optionDisabled="disabled"
             placeholder="Select one or more members"
             filter
-            :filter-fields="['username', 'fullName', 'email']"
+            :filter-fields="['username', 'fullName', 'displayName', 'email']"
             emptyMessage="No available members"
             display="chip"
             fluid
           >
             <template #option="{ option }">
-              <div>{{ option.fullName }} <span style="color:var(--theme-text-weak);font-size:12px;">(@{{ option.username }})</span></div>
+              <div>{{ option.displayName }} <span style="color:var(--theme-text-weak);font-size:12px;">(@{{ option.username }})</span></div>
             </template>
           </MultiSelect>
         </div>
