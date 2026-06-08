@@ -108,7 +108,7 @@ public class ProjectController {
     }
 
     @PostMapping("/{id}/tasks")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MEMBER')")
     public ResponseEntity<ProjectTaskResponse> createTask(
             @PathVariable Long id,
             @Valid @RequestBody ProjectTaskRequest request

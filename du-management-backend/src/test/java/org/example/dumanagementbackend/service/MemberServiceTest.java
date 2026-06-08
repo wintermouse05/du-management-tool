@@ -48,6 +48,9 @@ class MemberServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     @InjectMocks
     private MemberService memberService;
 
@@ -225,6 +228,32 @@ class MemberServiceTest {
     }
 
     @Test
+    void update_revokesRefreshTokensWhenAccountBecomesInactive() {
+        Role role = buildRole(1L, "MEMBER");
+        User existing = buildUser(4L, "member", role);
+        existing.setStatus(UserStatus.ACTIVE);
+        MemberRequest req = new MemberRequest(
+                1L,
+                "member",
+                existing.getEmail(),
+                null,
+                existing.getFullName(),
+                existing.getDob(),
+                existing.getJoinDate(),
+                UserStatus.INACTIVE
+        );
+
+        when(userRepository.findByIdAndDeletedAtIsNull(4L)).thenReturn(Optional.of(existing));
+        when(roleRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(role));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MemberResponse response = memberService.update(4L, req);
+
+        assertEquals(UserStatus.INACTIVE, response.status());
+        verify(refreshTokenService).revokeActiveByUserId(4L, "USER_INACTIVE");
+    }
+
+    @Test
     void update_throwsBadRequestWhenEmailAlreadyExistsOnAnotherUser() {
         Role role = buildRole(1L, "MEMBER");
         User existing = buildUser(4L, "oldname", role);
@@ -255,6 +284,7 @@ class MemberServiceTest {
         MemberResponse response = memberService.deactivate(5L);
 
         assertEquals(UserStatus.INACTIVE, response.status());
+        verify(refreshTokenService).revokeActiveByUserId(5L, "USER_INACTIVE");
     }
 
     @Test

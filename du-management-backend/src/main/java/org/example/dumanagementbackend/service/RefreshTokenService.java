@@ -17,6 +17,7 @@ import org.example.dumanagementbackend.entity.RefreshToken;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.exception.UnauthorizedException;
 import org.example.dumanagementbackend.repository.RefreshTokenRepository;
+import org.example.dumanagementbackend.security.AccountStatusPolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -54,6 +55,13 @@ public class RefreshTokenService {
 
     @Transactional
     public void issueNewRefreshToken(User user, HttpServletRequest request, HttpServletResponse response) {
+        if (!AccountStatusPolicy.isActive(user)) {
+            throw new UnauthorizedException(
+                    AccountStatusPolicy.ACCOUNT_UNAVAILABLE_CODE,
+                    AccountStatusPolicy.ACCOUNT_UNAVAILABLE_MESSAGE
+            );
+        }
+
         Instant now = Instant.now();
         String rawToken = generateRawToken();
 
@@ -94,9 +102,12 @@ public class RefreshTokenService {
             throw new UnauthorizedException("Refresh token has expired");
         }
 
-        if (presentedToken.getUser().isDeleted()) {
-            revokeTokenFamily(presentedToken.getFamilyId(), "USER_ARCHIVED");
-            throw new UnauthorizedException("Refresh token is invalid");
+        if (!AccountStatusPolicy.isActive(presentedToken.getUser())) {
+            revokeTokenFamily(presentedToken.getFamilyId(), "USER_INACTIVE");
+            throw new UnauthorizedException(
+                    AccountStatusPolicy.ACCOUNT_UNAVAILABLE_CODE,
+                    AccountStatusPolicy.ACCOUNT_UNAVAILABLE_MESSAGE
+            );
         }
 
         String replacementRawToken = generateRawToken();

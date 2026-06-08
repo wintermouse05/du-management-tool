@@ -11,8 +11,10 @@ import org.example.dumanagementbackend.dto.auth.LoginResponse;
 import org.example.dumanagementbackend.entity.PasswordResetToken;
 import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.exception.BadRequestException;
+import org.example.dumanagementbackend.exception.UnauthorizedException;
 import org.example.dumanagementbackend.repository.PasswordResetTokenRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
+import org.example.dumanagementbackend.security.AccountStatusPolicy;
 import org.example.dumanagementbackend.security.JwtService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -89,8 +91,14 @@ public class PasswordResetService {
         }
 
         User user = resetToken.getUser();
-        if (user.isDeleted()) {
+        if (user == null || user.isDeleted()) {
             throw new BadRequestException("Invalid or expired reset token");
+        }
+        if (!AccountStatusPolicy.isActive(user)) {
+            throw new UnauthorizedException(
+                    AccountStatusPolicy.ACCOUNT_UNAVAILABLE_CODE,
+                    AccountStatusPolicy.ACCOUNT_UNAVAILABLE_MESSAGE
+            );
         }
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);

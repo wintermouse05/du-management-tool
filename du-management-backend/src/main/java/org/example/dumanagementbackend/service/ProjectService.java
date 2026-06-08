@@ -21,6 +21,7 @@ import org.example.dumanagementbackend.entity.ProjectMember;
 import org.example.dumanagementbackend.entity.ProjectMemberId;
 import org.example.dumanagementbackend.entity.Task;
 import org.example.dumanagementbackend.entity.User;
+import org.example.dumanagementbackend.entity.enums.ProjectRole;
 import org.example.dumanagementbackend.entity.enums.ProjectStatus;
 import org.example.dumanagementbackend.entity.enums.TaskStatus;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
@@ -32,6 +33,9 @@ import org.example.dumanagementbackend.repository.TaskRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -177,6 +181,7 @@ public class ProjectService {
     @Transactional
     public ProjectTaskResponse createTask(Long projectId, ProjectTaskRequest request) {
         Project project = getProject(projectId);
+        assertCanCreateTask(projectId);
         validateTaskRange(request.startTime(), request.deadline());
         List<User> assignees = getTaskAssignees(projectId, request.assigneeIds());
 
@@ -229,8 +234,7 @@ public class ProjectService {
     }
 
     private String getCurrentUsername() {
-        org.springframework.security.core.Authentication authentication =
-                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return null;
         }
@@ -238,13 +242,31 @@ public class ProjectService {
     }
 
     private boolean hasAdminOrHRRole() {
-        org.springframework.security.core.Authentication authentication =
-                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return false;
         }
         return authentication.getAuthorities().stream().anyMatch(authority ->
                 "ROLE_ADMIN".equals(authority.getAuthority()) || "ROLE_HR".equals(authority.getAuthority()));
+    }
+
+    private void assertCanCreateTask(Long projectId) {
+        if (hasAdminOrHRRole()) {
+            return;
+        }
+
+        String currentUsername = getCurrentUsername();
+        if (currentUsername == null) {
+            throw new AccessDeniedException("Only project managers can create tasks for this project");
+        }
+
+        User currentUser = userRepository.findByUsernameAndDeletedAtIsNull(currentUsername)
+                .orElseThrow(() -> new AccessDeniedException("Only project managers can create tasks for this project"));
+        ProjectMember currentMember = projectMemberRepository.findByProjectIdAndUserId(projectId, currentUser.getId())
+                .orElseThrow(() -> new AccessDeniedException("Only project managers can create tasks for this project"));
+        if (currentMember.getProjectRole() != ProjectRole.PROJECT_MANAGER) {
+            throw new AccessDeniedException("Only project managers can create tasks for this project");
+        }
     }
 
     private Project getProject(Long id) {

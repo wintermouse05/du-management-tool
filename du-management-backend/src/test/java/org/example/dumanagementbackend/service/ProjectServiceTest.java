@@ -35,15 +35,24 @@ import org.example.dumanagementbackend.repository.ProjectMemberRepository;
 import org.example.dumanagementbackend.repository.ProjectRepository;
 import org.example.dumanagementbackend.repository.TaskRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 class ProjectServiceTest {
 
     private static final LocalDateTime START = LocalDateTime.of(2026, 6, 1, 9, 0);
     private static final LocalDateTime END = LocalDateTime.of(2026, 7, 1, 18, 0);
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     void create_savesProjectWithLifecycleStatus() {
@@ -237,6 +246,7 @@ class ProjectServiceTest {
     @Test
     void createTask_savesProjectScopedTaskForProjectMembers() {
         Harness harness = new Harness();
+        authenticateAs("admin", "ROLE_ADMIN");
         Project project = buildProject(1L);
         User assignee = buildUser(2L, "member", UserStatus.ACTIVE);
         User reviewer = buildUser(3L, "reviewer", UserStatus.ACTIVE);
@@ -263,8 +273,54 @@ class ProjectServiceTest {
     }
 
     @Test
+    void createTask_allowsProjectManagerMemberForTheirProject() {
+        Harness harness = new Harness();
+        Project project = buildProject(1L);
+        User manager = buildUser(2L, "manager", UserStatus.ACTIVE);
+        User assignee = buildUser(3L, "member", UserStatus.ACTIVE);
+        harness.addProject(project);
+        harness.addUser(manager);
+        harness.addUser(assignee);
+        harness.addProjectMember(buildMembership(project, manager, ProjectRole.PROJECT_MANAGER));
+        harness.addProjectMember(buildMembership(project, assignee, ProjectRole.BACKEND_DEVELOPER));
+        authenticateAs("manager", "ROLE_MEMBER");
+
+        ProjectTaskResponse response = harness.service.createTask(1L, new ProjectTaskRequest(
+                "API work",
+                null,
+                TaskStatus.TODO,
+                List.of(3L),
+                START,
+                END
+        ));
+
+        assertEquals(10L, response.id());
+        assertEquals(1L, harness.tasks.size());
+    }
+
+    @Test
+    void createTask_rejectsProjectMemberWhoIsNotProjectManager() {
+        Harness harness = new Harness();
+        Project project = buildProject(1L);
+        User developer = buildUser(2L, "developer", UserStatus.ACTIVE);
+        harness.addProject(project);
+        harness.addUser(developer);
+        harness.addProjectMember(buildMembership(project, developer, ProjectRole.BACKEND_DEVELOPER));
+        authenticateAs("developer", "ROLE_MEMBER");
+
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class, () -> harness.service.createTask(
+                1L,
+                new ProjectTaskRequest("API work", null, TaskStatus.TODO, List.of(2L), START, END)
+        ));
+
+        assertEquals("Only project managers can create tasks for this project", ex.getMessage());
+        assertEquals(0, harness.tasks.size());
+    }
+
+    @Test
     void createTask_rejectsAssigneeWhoIsNotProjectMember() {
         Harness harness = new Harness();
+        authenticateAs("admin", "ROLE_ADMIN");
         Project project = buildProject(1L);
         User assignee = buildUser(2L, "member", UserStatus.ACTIVE);
         harness.addProject(project);
@@ -282,6 +338,7 @@ class ProjectServiceTest {
     @Test
     void createTask_rejectsDuplicateAssignees() {
         Harness harness = new Harness();
+        authenticateAs("admin", "ROLE_ADMIN");
         Project project = buildProject(1L);
         User assignee = buildUser(2L, "member", UserStatus.ACTIVE);
         harness.addProject(project);
@@ -300,6 +357,7 @@ class ProjectServiceTest {
     @Test
     void createTask_rejectsTaskDateRangeWhenStartIsAfterDeadline() {
         Harness harness = new Harness();
+        authenticateAs("admin", "ROLE_ADMIN");
         harness.addProject(buildProject(1L));
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> harness.service.createTask(
@@ -374,6 +432,10 @@ class ProjectServiceTest {
         task.setStartTime(START);
         task.setDeadline(END);
         return task;
+    }
+
+    private static void authenticateAs(String username, String role) {
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(username, "password", role));
     }
 
     private static final class Harness {
@@ -504,6 +566,10 @@ class ProjectServiceTest {
                             return byName != 0 ? byName : left.getUsername().compareToIgnoreCase(right.getUsername());
                         })
                         .toList();
+                case "findByUsernameAndDeletedAtIsNull" -> users.values().stream()
+                        .filter(user -> !user.isDeleted())
+                        .filter(user -> user.getUsername().equalsIgnoreCase((String) args[0]))
+                        .findFirst();
                 default -> defaultValue(method);
             });
         }

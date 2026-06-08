@@ -8,14 +8,17 @@ import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
+import org.example.dumanagementbackend.exception.UnauthorizedException;
 import org.example.dumanagementbackend.repository.RoleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
+import org.example.dumanagementbackend.security.AccountStatusPolicy;
 import org.example.dumanagementbackend.security.JwtService;
 import java.time.LocalDate;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -46,6 +49,8 @@ public class AuthService {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.username(), request.password())
             );
+        } catch (DisabledException ex) {
+            throw accountUnavailable();
         } catch (AuthenticationException ex) {
             throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE, ex);
         }
@@ -53,6 +58,9 @@ public class AuthService {
         User user = userRepository.findByUsernameAndDeletedAtIsNull(request.username())
                 .or(() -> userRepository.findByEmailAndDeletedAtIsNull(request.username()))
                 .orElseThrow(() -> new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE));
+        if (!AccountStatusPolicy.isActive(user)) {
+            throw accountUnavailable();
+        }
 
         return createAuthenticatedSession(user, httpRequest, httpResponse);
     }
@@ -130,5 +138,12 @@ public class AuthService {
     private LoginResponse buildAccessTokenResponse(User user) {
         String token = jwtService.generateToken(user.getUsername(), user.getRole().getName());
         return new LoginResponse(token, "Bearer", user.getUsername(), user.getRole().getName(), user.getId());
+    }
+
+    private UnauthorizedException accountUnavailable() {
+        return new UnauthorizedException(
+                AccountStatusPolicy.ACCOUNT_UNAVAILABLE_CODE,
+                AccountStatusPolicy.ACCOUNT_UNAVAILABLE_MESSAGE
+        );
     }
 }

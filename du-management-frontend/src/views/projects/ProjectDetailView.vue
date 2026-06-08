@@ -138,6 +138,12 @@ const canSubmitTask = computed(() => {
     && resolveFormDate(taskDeadlineDate.value) !== null
 })
 
+const isCurrentUserProjectManager = computed(() => members.value.some(member =>
+  member.userId === auth.userId && member.projectRole === ProjectRole.PROJECT_MANAGER
+))
+
+const canCreateTask = computed(() => auth.isAdminOrHR || isCurrentUserProjectManager.value)
+
 function isCurrentUserAssignee(task: ProjectTaskResponse): boolean {
   return (task.assignees || []).some(a => a.id === auth.userId)
 }
@@ -530,7 +536,7 @@ onMounted(loadAll)
       <div class="section-toolbar">
         <h3>Tasks</h3>
         <Button
-          v-if="auth.isAdminOrHR"
+          v-if="canCreateTask"
           label="Create Task"
           icon="pi pi-plus"
           :disabled="members.length === 0"

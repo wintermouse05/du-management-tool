@@ -69,6 +69,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                if (!userDetails.isEnabled()) {
+                    request.setAttribute(
+                            RestAuthenticationEntryPoint.AUTH_ERROR_MESSAGE_ATTR,
+                            AccountStatusPolicy.ACCOUNT_UNAVAILABLE_MESSAGE
+                    );
+                    restAuthenticationEntryPoint.commence(
+                            request,
+                            response,
+                            new InsufficientAuthenticationException(AccountStatusPolicy.ACCOUNT_UNAVAILABLE_MESSAGE)
+                    );
+                    return;
+                }
                 if (jwtService.isTokenValid(jwt, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails,

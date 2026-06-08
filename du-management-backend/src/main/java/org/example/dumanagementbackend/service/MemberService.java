@@ -57,6 +57,7 @@ public class MemberService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public MemberResponse create(MemberRequest request) {
@@ -183,16 +184,23 @@ public class MemberService {
     @Transactional
     public MemberResponse update(Long id, MemberRequest request) {
         User user = getEntityById(id);
+        boolean wasActive = user.getStatus() == UserStatus.ACTIVE;
         validateUpdateUniqueness(id, request.username(), request.email());
         apply(user, request);
-        return toResponse(userRepository.save(user));
+        User saved = userRepository.save(user);
+        if (wasActive && saved.getStatus() == UserStatus.INACTIVE) {
+            refreshTokenService.revokeActiveByUserId(saved.getId(), "USER_INACTIVE");
+        }
+        return toResponse(saved);
     }
 
     @Transactional
     public MemberResponse deactivate(Long id) {
         User user = getEntityById(id);
         user.setStatus(UserStatus.INACTIVE);
-        return toResponse(userRepository.save(user));
+        User saved = userRepository.save(user);
+        refreshTokenService.revokeActiveByUserId(saved.getId(), "USER_INACTIVE");
+        return toResponse(saved);
     }
 
     public User getEntityById(Long id) {

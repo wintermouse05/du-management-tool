@@ -169,6 +169,9 @@ public final class ApiErrorCodeResolver {
 
     public static String resolveUnauthorizedCode(String message) {
         String normalized = normalize(message);
+        if (contains(normalized, "something went wrong with this account")) {
+            return "ACCOUNT_UNAVAILABLE";
+        }
         if (contains(normalized, "refresh token has expired")) {
             return "REFRESH_TOKEN_EXPIRED";
         }

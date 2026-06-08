@@ -23,6 +23,7 @@ const TECHNICAL_DETAIL_PATTERN =
 
 const ERROR_CODE_MESSAGE_MAP: Record<string, string> = {
   INVALID_CREDENTIALS: 'Invalid username or password',
+  ACCOUNT_UNAVAILABLE: 'Something went wrong with this account. Please contact an administrator.',
   UNAUTHORIZED: 'Your session has expired. Please sign in again.',
   ACCESS_TOKEN_EXPIRED: 'Your session has expired. Please sign in again.',
   ACCESS_TOKEN_INVALID: 'Your session is invalid. Please sign in again.',

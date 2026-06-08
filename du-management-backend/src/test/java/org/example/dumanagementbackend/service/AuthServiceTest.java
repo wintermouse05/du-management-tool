@@ -17,8 +17,10 @@ import org.example.dumanagementbackend.entity.User;
 import org.example.dumanagementbackend.entity.enums.UserStatus;
 import org.example.dumanagementbackend.exception.BadRequestException;
 import org.example.dumanagementbackend.exception.ResourceNotFoundException;
+import org.example.dumanagementbackend.exception.UnauthorizedException;
 import org.example.dumanagementbackend.repository.RoleRepository;
 import org.example.dumanagementbackend.repository.UserRepository;
+import org.example.dumanagementbackend.security.AccountStatusPolicy;
 import org.example.dumanagementbackend.security.JwtService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +29,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -186,6 +189,40 @@ class AuthServiceTest {
 
         assertEquals("Invalid username or password", ex.getMessage());
         verify(userRepository, never()).findByUsername(anyString());
+    }
+
+    @Test
+    void login_returnsGenericAccountErrorWhenAuthenticationDetectsInactiveUser() {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new DisabledException("User is disabled"));
+
+        UnauthorizedException ex = assertThrows(
+                UnauthorizedException.class,
+                () -> authService.login(new LoginRequest("bob", "pass"))
+        );
+
+        assertEquals(AccountStatusPolicy.ACCOUNT_UNAVAILABLE_CODE, ex.getErrorCode());
+        assertEquals(AccountStatusPolicy.ACCOUNT_UNAVAILABLE_MESSAGE, ex.getMessage());
+        verify(userRepository, never()).findByUsername(anyString());
+        verify(jwtService, never()).generateToken(anyString(), anyString());
+    }
+
+    @Test
+    void login_returnsGenericAccountErrorWhenInactiveUserIsLoadedAfterAuthentication() {
+        Role role = buildRole(1L, "MEMBER");
+        User user = buildUser(7L, "bob", role);
+        user.setStatus(UserStatus.INACTIVE);
+        when(userRepository.findByUsernameAndDeletedAtIsNull("bob")).thenReturn(Optional.of(user));
+
+        UnauthorizedException ex = assertThrows(
+                UnauthorizedException.class,
+                () -> authService.login(new LoginRequest("bob", "pass"))
+        );
+
+        assertEquals(AccountStatusPolicy.ACCOUNT_UNAVAILABLE_CODE, ex.getErrorCode());
+        assertEquals(AccountStatusPolicy.ACCOUNT_UNAVAILABLE_MESSAGE, ex.getMessage());
+        verify(jwtService, never()).generateToken(anyString(), anyString());
+        verify(refreshTokenService, never()).issueNewRefreshToken(any(), any(), any());
     }
 
     @Test
